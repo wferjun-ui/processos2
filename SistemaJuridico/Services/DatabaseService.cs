@@ -12,12 +12,12 @@ namespace SistemaJuridico.Services
     {
         private readonly string _connectionString;
 
-        public DatabaseService()
+        // Agora recebe o caminho escolhido pelo usuário
+        public DatabaseService(string dbFolder)
         {
-            // Caminho do banco de dados na pasta do usuário
-            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SistemaJuridico");
-            Directory.CreateDirectory(folder);
-            var dbPath = Path.Combine(folder, "juridico_v5.db");
+            // Garante que a pasta existe
+            Directory.CreateDirectory(dbFolder);
+            var dbPath = Path.Combine(dbFolder, "juridico_v5.db");
             _connectionString = $"Data Source={dbPath}";
         }
 
@@ -30,7 +30,7 @@ namespace SistemaJuridico.Services
             
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
 
-            // --- CRIAÇÃO DAS TABELAS ---
+            // --- TABELAS ---
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, salt TEXT, is_admin INTEGER DEFAULT 0, email TEXT);
@@ -66,26 +66,14 @@ namespace SistemaJuridico.Services
                     FOREIGN KEY(processo_id) REFERENCES processos(id) ON DELETE CASCADE);
             ");
 
-            // --- CORREÇÃO DE LOGIN: FORÇAR ADMIN ---
-            // Verifica se o admin já existe
-            var adminExists = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios WHERE username = 'admin'");
-
-            if (adminExists == 0)
-            {
-                // Se não existe, cria do zero
-                RegistrarUsuario("admin", "admin", "admin@sistema.local", true);
-            }
-            else
-            {
-                // SE JÁ EXISTE, RESETA A SENHA PARA "admin" PARA GARANTIR O ACESSO
-                var salt = GenerateSalt();
-                var hash = HashPassword("admin", salt);
-                conn.Execute("UPDATE usuarios SET password_hash = @h, salt = @s, is_admin = 1 WHERE username = 'admin'", 
-                    new { h = hash, s = salt });
-            }
+            // --- CORREÇÃO DEFINITIVA DE LOGIN ---
+            // Removemos o usuário admin antigo para recriá-lo do zero. 
+            // Isso evita conflitos de hash antigo vs novo.
+            conn.Execute("DELETE FROM usuarios WHERE username = 'admin'");
+            
+            // Recria o admin com senha "admin"
+            RegistrarUsuario("admin", "admin", "admin@sistema.local", true);
         }
-
-        // --- AUTENTICAÇÃO ---
 
         public (bool Success, bool IsAdmin, string Username) Login(string username, string password)
         {
@@ -98,6 +86,7 @@ namespace SistemaJuridico.Services
             string storedHash = user.password_hash;
             string inputHash = HashPassword(password, salt);
 
+            // Comparação simples de strings
             if (storedHash == inputHash)
             {
                 bool isAdmin = (user.is_admin == 1);
@@ -140,7 +129,6 @@ namespace SistemaJuridico.Services
         }
 
         // --- MÉTODOS DE NEGÓCIO ---
-
         public void SalvarNovoProcesso(string numero, string paciente, string juiz, string reu, string classificacao, string usuarioLogado)
         {
             using var conn = GetConnection();
@@ -150,30 +138,20 @@ namespace SistemaJuridico.Services
             {
                 var procId = Guid.NewGuid().ToString();
                 var hoje = DateTime.Now;
-                
                 var dataPrazo = hoje.AddDays(14); 
                 if (dataPrazo.DayOfWeek == DayOfWeek.Saturday) dataPrazo = dataPrazo.AddDays(2);
                 if (dataPrazo.DayOfWeek == DayOfWeek.Sunday) dataPrazo = dataPrazo.AddDays(1);
                 
                 var prazoStr = dataPrazo.ToString("dd/MM/yyyy");
 
+                // Corrige o nome do parâmetro @classificacao
                 conn.Execute(@"INSERT INTO processos (id, numero, paciente, juiz, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
                     VALUES (@id, @num, @pac, @juiz, @classificacao, 'Conhecimento', @dt, @prazo)",
-                    new { 
-                        id = procId, 
-                        num = numero, 
-                        pac = paciente, 
-                        juiz, 
-                        classificacao, 
-                        dt = hoje.ToString("dd/MM/yyyy"), 
-                        prazo = prazoStr 
-                    }, trans);
+                    new { id = procId, num = numero, pac = paciente, juiz, classificacao, dt = hoje.ToString("dd/MM/yyyy"), prazo = prazoStr }, trans);
 
                 if (!string.IsNullOrEmpty(reu))
-                {
                     conn.Execute("INSERT INTO reus (id, processo_id, nome) VALUES (@id, @pid, @nome)",
                         new { id = Guid.NewGuid().ToString(), pid = procId, nome = reu }, trans);
-                }
 
                 conn.Execute(@"INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, proximo_prazo_padrao, alteracoes_texto)
                     VALUES (@id, @pid, @dh, 'Cadastro Inicial', @resp, @prazo, 'Processo Criado')",
@@ -181,11 +159,7 @@ namespace SistemaJuridico.Services
 
                 trans.Commit();
             }
-            catch 
-            { 
-                trans.Rollback(); 
-                throw; 
-            }
+            catch { trans.Rollback(); throw; }
         }
     }
 }
