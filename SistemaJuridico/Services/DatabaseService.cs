@@ -23,7 +23,9 @@ namespace SistemaJuridico.Services
             _dbPath = Path.Combine(dbFolder, "juridico_v5.db");
             _backupFolder = Path.Combine(dbFolder, "Backups");
             _connectionString = $"Data Source={_dbPath}";
-            // Não chama Initialize aqui para evitar bloqueio no construtor se usado em DesignTime
+            
+            // CORREÇÃO: Mapeia automaticamente colunas como 'data_prescricao' para a propriedade 'DataPrescricao'
+            DefaultTypeMap.MatchNamesWithUnderscores = true;
         }
 
         public SqliteConnection GetConnection() => new SqliteConnection(_connectionString);
@@ -33,10 +35,8 @@ namespace SistemaJuridico.Services
             using var conn = GetConnection();
             conn.Open();
             
-            // OTIMIZAÇÃO: Igual ao Python (WAL + Synchronous Normal)
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;");
 
-            // SCHEMA: Tabelas idênticas ao Python
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, 
@@ -92,10 +92,8 @@ namespace SistemaJuridico.Services
             }
         }
 
-        // --- BACKUP AUTOMÁTICO BACKGROUND ---
         public void PerformBackup()
         {
-            // Executa em thread separada para não travar a UI (Igual Python threading)
             Task.Run(() => 
             {
                 try
@@ -104,7 +102,6 @@ namespace SistemaJuridico.Services
                     var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     var backupPath = Path.Combine(_backupFolder, $"backup_auto_{timestamp}.db");
                     
-                    // Sqlite suporta backup online
                     using (var source = GetConnection())
                     using (var dest = new SqliteConnection($"Data Source={backupPath}"))
                     {
@@ -113,17 +110,15 @@ namespace SistemaJuridico.Services
                         source.BackupDatabase(dest);
                     }
 
-                    // Limpeza de backups antigos (Manter 10)
                     var files = new DirectoryInfo(_backupFolder).GetFiles("*.db")
                         .OrderByDescending(f => f.CreationTime).Skip(10);
                     
                     foreach (var f in files) f.Delete();
                 }
-                catch { /* Log silently */ }
+                catch { }
             });
         }
 
-        // --- IMPORTAÇÃO JSON (DataImporter do Python) ---
         public (bool success, string msg) ImportFromJson(string jsonPath)
         {
             try
@@ -151,12 +146,10 @@ namespace SistemaJuridico.Services
                             var vals = string.Join(",", dict.Keys.Select(k => "@" + k));
                             var query = $"INSERT OR REPLACE INTO {tableName} ({cols}) VALUES ({vals})";
                             
-                            // Conversão necessária pois System.Text.Json retorna JsonElement
                             var parameters = new DynamicParameters();
                             foreach(var kv in dict)
                             {
                                 var val = kv.Value?.ToString();
-                                // Tratamento especial para booleanos convertidos para int no SQLite
                                 if (kv.Value is JsonElement el && (el.ValueKind == JsonValueKind.True || el.ValueKind == JsonValueKind.False))
                                     parameters.Add(kv.Key, el.GetBoolean() ? 1 : 0);
                                 else
@@ -186,7 +179,6 @@ namespace SistemaJuridico.Services
             }
         }
 
-        // --- SEGURANÇA E LOGIN ---
         public string GenerateSalt() => Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLower();
         
         public string HashPassword(string password, string salt)
@@ -212,7 +204,6 @@ namespace SistemaJuridico.Services
             return (false, false, "");
         }
 
-        // --- AUTH MANAGER ---
         public bool AuthorizeEmail(string email, bool isAdmin)
         {
             using var conn = GetConnection();
