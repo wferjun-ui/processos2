@@ -1,0 +1,71 @@
+<Window x:Class="SistemaJuridico.Views.ProcessoDetalhesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Gestão do Processo" Height="768" Width="1024" WindowStartupLocation="CenterScreen">
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/> <ColumnDefinition Width="*"/>   </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
+            <StackPanel Margin="20">
+                <Button Command="{Binding VoltarCommand}" Content="VOLTAR" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,0,20"/>
+                
+                <TextBlock Text="PROCESSO" FontWeight="Bold" Foreground="#64748B" FontSize="10"/>
+                <TextBlock Text="{Binding Processo.Numero}" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                
+                <TextBlock Text="PACIENTE" FontWeight="Bold" Foreground="#64748B" FontSize="10"/>
+                <TextBlock Text="{Binding Processo.Paciente}" FontSize="14" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                <Separator Margin="0,10"/>
+
+                <TextBlock Text="STATUS ATUAL" FontWeight="Bold" Foreground="#64748B" FontSize="10"/>
+                <TextBlock Text="{Binding StatusTexto}" FontSize="18" FontWeight="Bold" Foreground="{Binding StatusCorBrush}"/>
+                
+                <TextBlock Text="PRÓXIMO PRAZO" FontWeight="Bold" Foreground="#64748B" FontSize="10" Margin="0,10,0,0"/>
+                <TextBlock Text="{Binding Processo.DataPrazo}" FontSize="14"/>
+            </StackPanel>
+        </Border>
+
+        <TabControl Grid.Column="1" Style="{StaticResource MaterialDesignNavigatilRailTabControl}" TabStripPlacement="Top">
+            <TabItem Header="VERIFICAÇÃO">
+                <ScrollViewer>
+                    <StackPanel Margin="20">
+                        <TextBlock Text="Nova Verificação" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+                        
+                        <TextBox Text="{Binding ObsFixa}" materialDesign:HintAssist.Hint="Observações Fixas" 
+                                 AcceptsReturn="True" Height="80" VerticalScrollBarVisibility="Auto" 
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,15"/>
+
+                        <CheckBox IsChecked="{Binding DiligenciaRealizada}" Content="Houve diligências realizadas?"/>
+                        <TextBox Text="{Binding DiligenciaDesc}" IsEnabled="{Binding DiligenciaRealizada}" 
+                                 materialDesign:HintAssist.Hint="Descreva as diligências..." Margin="0,5,0,15"/>
+
+                        <CheckBox IsChecked="{Binding DiligenciaPendente}" Content="Existem pendências?"/>
+                        <TextBox Text="{Binding PendenciaDesc}" IsEnabled="{Binding DiligenciaPendente}" 
+                                 materialDesign:HintAssist.Hint="O que falta fazer..." Margin="0,5,0,15"/>
+                        
+                        <Button Command="{Binding SalvarVerificacaoCommand}" Content="SALVAR VERIFICAÇÃO" Height="50" Margin="0,20"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            
+            <TabItem Header="HISTÓRICO">
+                <DataGrid ItemsSource="{Binding Historico}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Data" Binding="{Binding data_hora}"/>
+                        <DataGridTextColumn Header="Resp." Binding="{Binding responsavel}"/>
+                        <DataGridTextColumn Header="Detalhes" Binding="{Binding alteracoes_texto}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            
+            <TabItem Header="FINANCEIRO">
+                <Grid>
+                    <TextBlock Text="Módulo Financeiro (Em Desenvolvimento)" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
