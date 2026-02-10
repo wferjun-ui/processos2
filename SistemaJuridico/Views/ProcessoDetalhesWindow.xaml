@@ -6,7 +6,9 @@
     
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="280"/> <ColumnDefinition Width="*"/>   </Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
             <StackPanel Margin="20">
@@ -19,52 +21,90 @@
                 <TextBlock Text="{Binding Processo.Paciente}" FontSize="14" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
                 <Separator Margin="0,10"/>
-
-                <TextBlock Text="STATUS ATUAL" FontWeight="Bold" Foreground="#64748B" FontSize="10"/>
                 <TextBlock Text="{Binding StatusTexto}" FontSize="18" FontWeight="Bold" Foreground="{Binding StatusCorBrush}"/>
-                
-                <TextBlock Text="PRÓXIMO PRAZO" FontWeight="Bold" Foreground="#64748B" FontSize="10" Margin="0,10,0,0"/>
-                <TextBlock Text="{Binding Processo.DataPrazo}" FontSize="14"/>
             </StackPanel>
         </Border>
 
         <TabControl Grid.Column="1" Style="{StaticResource MaterialDesignNavigatilRailTabControl}" TabStripPlacement="Top">
+            
             <TabItem Header="VERIFICAÇÃO">
                 <ScrollViewer>
                     <StackPanel Margin="20">
                         <TextBlock Text="Nova Verificação" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
-                        
-                        <TextBox Text="{Binding ObsFixa}" materialDesign:HintAssist.Hint="Observações Fixas" 
-                                 AcceptsReturn="True" Height="80" VerticalScrollBarVisibility="Auto" 
-                                 Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,15"/>
-
-                        <CheckBox IsChecked="{Binding DiligenciaRealizada}" Content="Houve diligências realizadas?"/>
-                        <TextBox Text="{Binding DiligenciaDesc}" IsEnabled="{Binding DiligenciaRealizada}" 
-                                 materialDesign:HintAssist.Hint="Descreva as diligências..." Margin="0,5,0,15"/>
-
-                        <CheckBox IsChecked="{Binding DiligenciaPendente}" Content="Existem pendências?"/>
-                        <TextBox Text="{Binding PendenciaDesc}" IsEnabled="{Binding DiligenciaPendente}" 
-                                 materialDesign:HintAssist.Hint="O que falta fazer..." Margin="0,5,0,15"/>
-                        
+                        <TextBox Text="{Binding ObsFixa}" materialDesign:HintAssist.Hint="Observações Fixas" AcceptsReturn="True" Height="80" Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,15"/>
+                        <CheckBox IsChecked="{Binding DiligenciaRealizada}" Content="Houve diligências?"/>
+                        <TextBox Text="{Binding DiligenciaDesc}" IsEnabled="{Binding DiligenciaRealizada}" materialDesign:HintAssist.Hint="Descrição..." Margin="0,5,0,15"/>
                         <Button Command="{Binding SalvarVerificacaoCommand}" Content="SALVAR VERIFICAÇÃO" Height="50" Margin="0,20"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
             
-            <TabItem Header="HISTÓRICO">
-                <DataGrid ItemsSource="{Binding Historico}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Data" Binding="{Binding data_hora}"/>
-                        <DataGridTextColumn Header="Resp." Binding="{Binding responsavel}"/>
-                        <DataGridTextColumn Header="Detalhes" Binding="{Binding alteracoes_texto}" Width="*"/>
-                    </DataGrid.Columns>
-                </DataGrid>
+            <TabItem Header="SAÚDE">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <ComboBox Text="{Binding SaudeTipo}" Width="120" materialDesign:HintAssist.Hint="Tipo">
+                            <ComboBoxItem Content="Medicamento"/><ComboBoxItem Content="Terapia"/>
+                        </ComboBox>
+                        <TextBox Text="{Binding SaudeNome}" Width="200" Margin="10,0" materialDesign:HintAssist.Hint="Nome"/>
+                        <TextBox Text="{Binding SaudeQtd}" Width="80" Margin="10,0" materialDesign:HintAssist.Hint="Qtd"/>
+                        <Button Command="{Binding AdicionarSaudeCommand}" Content="Adicionar"/>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding ItensSaude}" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}"/>
+                            <DataGridTextColumn Header="Nome" Binding="{Binding Nome}" Width="*"/>
+                            <DataGridTextColumn Header="Qtd" Binding="{Binding Qtd}"/>
+                            <DataGridTemplateColumn>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Command="{Binding DataContext.RemoverSaudeCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                                                CommandParameter="{Binding Id}" Content="X" Background="Red" BorderBrush="Red" Height="25"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
             </TabItem>
-            
+
             <TabItem Header="FINANCEIRO">
-                <Grid>
-                    <TextBlock Text="Módulo Financeiro (Em Desenvolvimento)" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    </Grid>
+                <Grid Margin="10">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBox Text="{Binding FinData}" Width="100" materialDesign:HintAssist.Hint="Data"/>
+                        <ComboBox Text="{Binding FinTipo}" Width="100" Margin="10,0">
+                            <ComboBoxItem Content="Alvará"/><ComboBoxItem Content="Despesa"/>
+                        </ComboBox>
+                        <TextBox Text="{Binding FinHistorico}" Width="200" Margin="10,0" materialDesign:HintAssist.Hint="Histórico"/>
+                        <TextBox Text="{Binding FinValor}" Width="100" Margin="10,0" materialDesign:HintAssist.Hint="Valor (R$)"/>
+                        <Button Command="{Binding AdicionarContaCommand}" Content="Lançar"/>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Text="{Binding FinSaldoTotal}" FontSize="20" FontWeight="Bold" Foreground="{Binding FinSaldoCor}" HorizontalAlignment="Right" Margin="0,0,10,10"/>
+
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding Contas}" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Data" Binding="{Binding Data}"/>
+                            <DataGridTextColumn Header="Histórico" Binding="{Binding Historico}" Width="*"/>
+                            <DataGridTextColumn Header="Crédito" Binding="{Binding ValorAlvara, StringFormat=C2}" Foreground="Green"/>
+                            <DataGridTextColumn Header="Débito" Binding="{Binding ValorConta, StringFormat=C2}" Foreground="Red"/>
+                            <DataGridTemplateColumn>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Command="{Binding DataContext.RemoverContaCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                                                CommandParameter="{Binding Id}" Content="X" Background="Red" BorderBrush="Red" Height="25"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    
+                    <Button Grid.Row="3" Command="{Binding GerarRelatorioPDFCommand}" Content="GERAR RELATÓRIO PDF" Margin="0,10,0,0" Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                </Grid>
             </TabItem>
         </TabControl>
     </Grid>
