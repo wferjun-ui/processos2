@@ -9,16 +9,9 @@ using System.Linq;
 
 namespace SistemaJuridico.ViewModels
 {
+    // DTOs auxiliares
     public partial class ReuDto : ObservableObject { [ObservableProperty] private string _nome = ""; }
-    public partial class ItemCadastroDto : ObservableObject {
-        [ObservableProperty] private string _tipo = "Medicamento";
-        [ObservableProperty] private string _nome = "";
-        [ObservableProperty] private string _qtd = "";
-        [ObservableProperty] private string _frequencia = "Mensal";
-        [ObservableProperty] private string _local = "Clínica";
-        [ObservableProperty] private string _data = "";
-    }
-
+    
     public partial class CadastroViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
@@ -36,6 +29,11 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private Visibility _saudeVisibility = Visibility.Collapsed;
         [ObservableProperty] private Visibility _btnExcluirVisibility = Visibility.Collapsed;
 
+        // Autocomplete Collections
+        public ObservableCollection<string> SugestoesJuiz { get; set; } = new();
+        public ObservableCollection<string> SugestoesPaciente { get; set; } = new();
+        public ObservableCollection<string> SugestoesGenitor { get; set; } = new();
+
         public ObservableCollection<ReuDto> Reus { get; set; } = new();
         public ObservableCollection<ItemCadastroDto> ItensSaude { get; set; } = new();
         public ObservableCollection<string> SugestoesTratamento { get; set; } = new();
@@ -46,13 +44,32 @@ namespace SistemaJuridico.ViewModels
             _closeAction = closeAction;
             _processoIdEdit = processoId;
             
-            CarregarSugestoes();
+            CarregarSugestoesTratamento();
 
             if (processoId != null) CarregarDados(processoId);
             else Reus.Add(new ReuDto());
         }
 
-        private void CarregarSugestoes() {
+        // --- LÓGICA DE AUTOCOMPLETE SIMULADA ---
+        // Em WPF puro, a View deve bindar 'TextChanged' ou usar um ComboBox IsEditable
+        // Aqui simulamos buscando do banco quando a propriedade muda
+        
+        partial void OnJuizChanged(string value) => BuscarSugestao("juiz", value, SugestoesJuiz);
+        partial void OnPacienteChanged(string value) => BuscarSugestao("paciente", value, SugestoesPaciente);
+        partial void OnGenitorNomeChanged(string value) => BuscarSugestao("genitor_rep_nome", value, SugestoesGenitor);
+
+        private void BuscarSugestao(string campo, string termo, ObservableCollection<string> lista)
+        {
+            if (string.IsNullOrWhiteSpace(termo) || termo.Length < 2) return;
+            // Debounce seria ideal, mas para local DB é rápido o suficiente
+            using var conn = _db.GetConnection();
+            var results = conn.Query<string>($"SELECT DISTINCT {campo} FROM processos WHERE {campo} LIKE @q LIMIT 5", new { q = $"%{termo}%" });
+            
+            lista.Clear();
+            foreach(var r in results) if(!string.IsNullOrEmpty(r)) lista.Add(r);
+        }
+
+        private void CarregarSugestoesTratamento() {
             using var conn = _db.GetConnection();
             var items = conn.Query<string>("SELECT nome FROM sugestoes_tratamento LIMIT 50");
             foreach(var i in items) SugestoesTratamento.Add(i);
@@ -65,8 +82,13 @@ namespace SistemaJuridico.ViewModels
             using var conn = _db.GetConnection();
             var p = conn.QueryFirstOrDefault("SELECT * FROM processos WHERE id=@id", new { id });
             
-            Numero = p.numero; IsAntigo = p.is_antigo == 1; Paciente = p.paciente; Juiz = p.juiz;
-            Classificacao = p.classificacao; GenitorNome = p.genitor_rep_nome; GenitorTipo = p.genitor_rep_tipo;
+            Numero = p.numero; IsAntigo = p.is_antigo == 1; 
+            // Preenche sem disparar o autocomplete loucamente
+            _paciente = p.paciente; OnPropertyChanged(nameof(Paciente));
+            _juiz = p.juiz; OnPropertyChanged(nameof(Juiz));
+            _genitorNome = p.genitor_rep_nome; OnPropertyChanged(nameof(GenitorNome));
+            
+            Classificacao = p.classificacao; GenitorTipo = p.genitor_rep_tipo;
             
             var rs = conn.Query("SELECT nome FROM reus WHERE processo_id=@id", new { id });
             foreach(var r in rs) Reus.Add(new ReuDto { Nome = r.nome });
