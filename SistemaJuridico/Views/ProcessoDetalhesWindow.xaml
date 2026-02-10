@@ -7,7 +7,10 @@
         Background="{DynamicResource MaterialDesignPaper}">
 
     <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         
         <Border Grid.Column="0" Background="White" Effect="{StaticResource MaterialDesignShadowDepth1}" Panel.ZIndex="1">
             <StackPanel Margin="20">
@@ -54,7 +57,10 @@
 
                         <TextBlock Text="3. PRÓXIMA VERIFICAÇÃO" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}"/>
                         <Grid Margin="0,5,0,20">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
                             <TextBox Text="{Binding Responsavel}" materialDesign:HintAssist.Hint="Responsável" Margin="0,0,10,0"/>
                             <TextBox Grid.Column="1" Text="{Binding ProxData}" materialDesign:HintAssist.Hint="Data (DD/MM/AAAA)"/>
                         </Grid>
@@ -68,7 +74,12 @@
                                             <StackPanel>
                                                 <TextBlock Text="{Binding Nome}" FontWeight="Bold" Foreground="#0284C7"/>
                                                 <Grid Margin="0,5">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
                                                     <TextBox Text="{Binding DataPrescricao}" materialDesign:HintAssist.Hint="Últ. Prescrição" Margin="0,0,5,0"/>
                                                     <TextBox Grid.Column="1" Text="{Binding Qtd}" materialDesign:HintAssist.Hint="Qtd/Freq" Margin="5,0"/>
                                                     <TextBox Grid.Column="2" Text="{Binding Local}" materialDesign:HintAssist.Hint="Local" Margin="5,0"/>
@@ -91,15 +102,26 @@
 
             <TabItem Header="CONTAS">
                 <Grid Margin="20">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                     
                     <materialDesign:Card Padding="15" Margin="0,0,0,20">
                         <StackPanel>
-                            <TextBlock Text="NOVO LANÇAMENTO" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock Text="NOVO LANÇAMENTO / EDIÇÃO" FontWeight="Bold" Margin="0,0,0,10"/>
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
                                 <ComboBox Text="{Binding FinTipo}" materialDesign:HintAssist.Hint="Tipo">
-                                    <ComboBoxItem Content="Alvará"/><ComboBoxItem Content="Despesa"/><ComboBoxItem Content="Tratamento"/>
+                                    <ComboBoxItem Content="Alvará"/>
+                                    <ComboBoxItem Content="Despesa"/>
+                                    <ComboBoxItem Content="Tratamento"/>
                                 </ComboBox>
                                 <TextBox Grid.Column="1" Text="{Binding FinData}" materialDesign:HintAssist.Hint="Data" Margin="10,0"/>
                                 <TextBox Grid.Column="2" Text="{Binding FinNf}" materialDesign:HintAssist.Hint="NF / Doc" Margin="10,0"/>
@@ -110,7 +132,12 @@
                             </Grid>
                             
                             <Grid Visibility="{Binding ExtrasVisivel}" Margin="0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
                                 <Grid>
                                     <ComboBox Visibility="{Binding ComboVisivel}" ItemsSource="{Binding ListaItensCombo}" SelectedItem="{Binding FinItemCombo}" materialDesign:HintAssist.Hint="Selecione Item..."/>
                                     <TextBox Visibility="{Binding TextoVisivel}" Text="{Binding FinItemTexto}" materialDesign:HintAssist.Hint="Nome do Item..."/>
@@ -125,38 +152,71 @@
                             </Grid>
 
                             <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
                                 <TextBox Text="{Binding FinValor}" materialDesign:HintAssist.Hint="VALOR (R$)" FontSize="16" FontWeight="Bold" Width="150"/>
-                                <Button Grid.Column="1" Command="{Binding AdicionarRascunhoCommand}" Content="ADICIONAR AO RASCUNHO" HorizontalAlignment="Right"/>
+                                
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Command="{Binding CancelarEdicaoCommand}" 
+                                            Visibility="{Binding BtnCancelarEditVisibility}" 
+                                            Content="CANCELAR" Style="{StaticResource MaterialDesignFlatButton}" Foreground="Red" Margin="0,0,10,0"/>
+                                    
+                                    <Button Command="{Binding AdicionarRascunhoCommand}" 
+                                            Content="{Binding BtnSalvarContaTexto}" 
+                                            Background="{Binding BtnSalvarContaCor}" 
+                                            BorderBrush="{Binding BtnSalvarContaCor}"/>
+                                </StackPanel>
                             </Grid>
                         </StackPanel>
                     </materialDesign:Card>
 
                     <Grid Grid.Row="1">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
                         <DockPanel LastChildFill="False">
-                            <TextBlock Text="RASCUNHOS (Pendente)" FontWeight="Bold" Foreground="#F59E0B" VerticalAlignment="Center"/>
+                            <TextBlock Text="RASCUNHOS (Pendente) - Duplo clique para editar" FontWeight="Bold" Foreground="#F59E0B" VerticalAlignment="Center"/>
                             <Button DockPanel.Dock="Right" Command="{Binding LancarTudoCommand}" Content="LANÇAR TUDO" Background="#F59E0B" BorderBrush="#F59E0B" Height="30" FontSize="12"/>
                         </DockPanel>
+                        
                         <DataGrid Grid.Row="1" ItemsSource="{Binding Rascunhos}" AutoGenerateColumns="False" IsReadOnly="True" Background="#FFFBEB">
+                            <DataGrid.InputBindings>
+                                <MouseBinding Gesture="LeftDoubleClick" Command="{Binding DataContext.EditarContaCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                            </DataGrid.InputBindings>
+                            
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Data" Binding="{Binding Data}"/>
                                 <DataGridTextColumn Header="Histórico" Binding="{Binding Hist}" Width="*"/>
                                 <DataGridTextColumn Header="Valor" Binding="{Binding Valor}"/>
-                                <DataGridTemplateColumn><DataGridTemplateColumn.CellTemplate><DataTemplate>
-                                    <Button Command="{Binding DataContext.ExcluirContaCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Id}" Content="X" Style="{StaticResource MaterialDesignFlatButton}" Foreground="Red"/>
-                                </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                                <DataGridTemplateColumn>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.ExcluirContaCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Id}" Content="X" Style="{StaticResource MaterialDesignFlatButton}" Foreground="Red"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>
 
                     <Grid Grid.Row="2" Margin="0,20,0,0">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
                         <DockPanel LastChildFill="False">
-                            <TextBlock Text="HISTÓRICO FINANCEIRO" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="HISTÓRICO FINANCEIRO - Duplo clique para editar" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}" VerticalAlignment="Center"/>
                             <Button DockPanel.Dock="Right" Command="{Binding GerarPdfCommand}" Content="PDF" Style="{StaticResource MaterialDesignOutlinedButton}" Height="30"/>
                         </DockPanel>
+                        
                         <DataGrid Grid.Row="1" ItemsSource="{Binding HistoricoFin}" AutoGenerateColumns="False" IsReadOnly="True">
+                             <DataGrid.InputBindings>
+                                <MouseBinding Gesture="LeftDoubleClick" Command="{Binding DataContext.EditarContaCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                            </DataGrid.InputBindings>
+
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Data" Binding="{Binding Data}"/>
                                 <DataGridTextColumn Header="Histórico" Binding="{Binding Hist}" Width="*"/>
