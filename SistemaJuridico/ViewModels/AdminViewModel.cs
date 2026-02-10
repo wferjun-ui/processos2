@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using SistemaJuridico.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Linq;
 
 namespace SistemaJuridico.ViewModels
 {
@@ -10,10 +11,8 @@ namespace SistemaJuridico.ViewModels
     {
         private readonly DatabaseService _db;
 
-        // Lista de usuários para a tabela
         public ObservableCollection<UserModel> Users { get; set; } = new();
 
-        // Campos para adicionar novo usuário
         [ObservableProperty] private string _novoUser = "";
         [ObservableProperty] private string _novaSenha = "";
         [ObservableProperty] private string _novoEmail = "";
@@ -38,33 +37,47 @@ namespace SistemaJuridico.ViewModels
         {
             if (string.IsNullOrWhiteSpace(NovoUser) || string.IsNullOrWhiteSpace(NovaSenha))
             {
-                MessageBox.Show("Preencha usuário e senha.", "Erro");
+                MessageBox.Show("Preencha Usuário e Senha.", "Campos Obrigatórios");
                 return;
             }
 
             try
             {
                 _db.RegistrarUsuario(NovoUser, NovaSenha, NovoEmail, NovoIsAdmin);
-                MessageBox.Show("Usuário criado com sucesso!");
-                
-                // Limpa campos
+                MessageBox.Show("Usuário cadastrado com sucesso!");
                 NovoUser = ""; NovaSenha = ""; NovoEmail = ""; NovoIsAdmin = false;
                 CarregarUsuarios();
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show("Erro ao criar usuário (talvez o nome já exista): " + ex.Message);
+                MessageBox.Show("Erro ao cadastrar (usuário já existe?): " + ex.Message);
             }
         }
 
         [RelayCommand]
         public void DeletarUsuario(string id)
         {
-            if (MessageBox.Show("Tem certeza que deseja remover este usuário?", "Confirmação", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            if (MessageBox.Show("Tem certeza que deseja remover este usuário?", "Confirmação", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
+                // Proteção para não se deletar
+                var currentUser = Application.Current.Properties["Usuario"]?.ToString();
+                var userToDelete = Users.FirstOrDefault(u => u.Id == id);
+                
+                if (userToDelete != null && userToDelete.Username == currentUser)
+                {
+                    MessageBox.Show("Você não pode deletar a si mesmo!");
+                    return;
+                }
+
                 _db.DeleteUser(id);
                 CarregarUsuarios();
             }
+        }
+
+        [RelayCommand]
+        public void Fechar()
+        {
+            Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.DataContext == this)?.Close();
         }
     }
 }
