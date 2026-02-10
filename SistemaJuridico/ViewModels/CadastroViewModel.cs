@@ -4,13 +4,10 @@ using Dapper;
 using SistemaJuridico.Services;
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Windows;
-using System.Text.RegularExpressions;
 
 namespace SistemaJuridico.ViewModels
 {
-    // Modelos para a UI de Cadastro
     public class ReuDto { public string Nome { get; set; } = ""; }
     public class ItemDto { 
         public string Tipo { get; set; } = "Medicamento"; 
@@ -33,10 +30,8 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _classificacao = "Cível";
         [ObservableProperty] private string _genitorNome = "";
         [ObservableProperty] private string _genitorTipo = "Genitor";
-        
         [ObservableProperty] private Visibility _saudeVisibility = Visibility.Collapsed;
 
-        // Listas dinâmicas
         public ObservableCollection<ReuDto> Reus { get; set; } = new();
         public ObservableCollection<ItemDto> ItensSaude { get; set; } = new();
 
@@ -44,27 +39,33 @@ namespace SistemaJuridico.ViewModels
         {
             _db = App.DB!;
             _closeAction = closeAction;
-            
-            // Inicia com um réu vazio por padrão
             Reus.Add(new ReuDto());
         }
 
-        partial void OnClassificacaoChanged(string value)
+        // Lógica de UI: Mostrar campos de saúde apenas se selecionado
+        partial void OnClassificacaoChanged(string value) => SaudeVisibility = value == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
+
+        // Lógica: Formatação CNJ em tempo real
+        partial void OnNumeroChanged(string value)
         {
-            SaudeVisibility = value == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
+            if (IsAntigo) return;
+            var formatted = ProcessLogic.FormatCNJ(value);
+            if (formatted != value)
+            {
+                Numero = formatted;
+            }
         }
 
-        [RelayCommand]
-        public void AddReu() => Reus.Add(new ReuDto());
+        // Lógica: Se marcar "Antigo", não formata
+        partial void OnIsAntigoChanged(bool value)
+        {
+            if (!value) Numero = ProcessLogic.FormatCNJ(Numero);
+        }
 
-        [RelayCommand]
-        public void RemoveReu(ReuDto item) => Reus.Remove(item);
-
-        [RelayCommand]
-        public void AddSaude() => ItensSaude.Add(new ItemDto());
-
-        [RelayCommand]
-        public void RemoveSaude(ItemDto item) => ItensSaude.Remove(item);
+        [RelayCommand] public void AddReu() => Reus.Add(new ReuDto());
+        [RelayCommand] public void RemoveReu(ReuDto item) => Reus.Remove(item);
+        [RelayCommand] public void AddSaude() => ItensSaude.Add(new ItemDto());
+        [RelayCommand] public void RemoveSaude(ItemDto item) => ItensSaude.Remove(item);
 
         [RelayCommand]
         public void Salvar()
@@ -83,19 +84,16 @@ namespace SistemaJuridico.ViewModels
 
                 var procId = Guid.NewGuid().ToString();
                 var hoje = DateTime.Now;
-                var dataPrazo = hoje.AddDays(14).ToString("dd/MM/yyyy");
+                
+                // USA A LÓGICA CENTRALIZADA DE PRAZOS
+                var (dataPrazo, _) = ProcessLogic.CalculateDueDates(hoje.ToString("dd/MM/yyyy"));
+                
                 var user = Application.Current.Properties["Usuario"]?.ToString() ?? "Admin";
 
-                // Insere Processo
                 conn.Execute(@"INSERT INTO processos (id, numero, is_antigo, paciente, juiz, genitor_rep_nome, genitor_rep_tipo, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
                     VALUES (@id, @n, @ia, @p, @j, @gn, @gt, @c, 'Conhecimento', @ua, @cp)",
-                    new { 
-                        id = procId, n = Numero, ia = IsAntigo ? 1 : 0, p = Paciente, j = Juiz, 
-                        gn = GenitorNome, gt = GenitorTipo, c = Classificacao, 
-                        ua = hoje.ToString("dd/MM/yyyy"), cp = dataPrazo 
-                    }, trans);
+                    new { id = procId, n = Numero, ia = IsAntigo ? 1 : 0, p = Paciente, j = Juiz, gn = GenitorNome, gt = GenitorTipo, c = Classificacao, ua = hoje.ToString("dd/MM/yyyy"), cp = dataPrazo }, trans);
 
-                // Insere Réus
                 foreach (var r in Reus)
                 {
                     if (!string.IsNullOrWhiteSpace(r.Nome))
@@ -103,7 +101,6 @@ namespace SistemaJuridico.ViewModels
                             new { id = Guid.NewGuid().ToString(), pid = procId, n = r.Nome }, trans);
                 }
 
-                // Insere Itens de Saúde (se for o caso)
                 if (Classificacao == "Saúde")
                 {
                     foreach (var i in ItensSaude)
@@ -115,22 +112,15 @@ namespace SistemaJuridico.ViewModels
                     }
                 }
 
-                // Histórico Inicial
                 conn.Execute("INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, proximo_prazo_padrao, alteracoes_texto) VALUES (@id, @pid, @dh, 'Cadastro Inicial', @resp, @pp, 'Processo Criado')",
                     new { id = Guid.NewGuid().ToString(), pid = procId, dh = hoje.ToString("s"), resp = user, pp = dataPrazo }, trans);
 
                 trans.Commit();
-                
-                // Backup após cadastro
                 _db.PerformBackup();
-
                 MessageBox.Show("Processo salvo com sucesso!");
                 _closeAction();
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Erro ao salvar: " + ex.Message);
-            }
+            catch (Exception ex) { MessageBox.Show("Erro ao salvar: " + ex.Message); }
         }
     }
 }
