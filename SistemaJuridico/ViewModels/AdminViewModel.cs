@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dapper;
+using Microsoft.Win32;
 using SistemaJuridico.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -37,9 +38,19 @@ namespace SistemaJuridico.ViewModels
         [RelayCommand]
         public void DeletarUser(string id) {
             if (MessageBox.Show("Remover usuário?", "Confirma", MessageBoxButton.YesNo) == MessageBoxResult.Yes) {
-                using var conn = _db.GetConnection();
-                conn.Execute("DELETE FROM usuarios WHERE id=@id", new { id });
+                _db.DeleteUser(id);
                 LoadUsers();
+            }
+        }
+
+        [RelayCommand]
+        public void ImportarJson() {
+            var ofd = new OpenFileDialog { Filter = "JSON files (*.json)|*.json", Title = "Importar Backup Legado" };
+            if (ofd.ShowDialog() == true) {
+                if (MessageBox.Show("Isso irá mesclar dados do JSON no banco atual. Continuar?", "Importar", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) {
+                    var (success, msg) = _db.ImportFromJson(ofd.FileName);
+                    MessageBox.Show(msg, success ? "Sucesso" : "Erro");
+                }
             }
         }
     }
