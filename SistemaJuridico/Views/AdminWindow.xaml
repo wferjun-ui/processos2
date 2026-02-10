@@ -46,7 +46,7 @@
                 <DataGridTemplateColumn Width="100">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Button Command="{Binding DataContext.DeletarUsuarioCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                            <Button Command="{Binding DataContext.DeletarUserCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
                                     CommandParameter="{Binding Id}" Content="EXCLUIR" Background="#FF5252" BorderBrush="#FF5252" Height="25" FontSize="10"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
