@@ -152,10 +152,18 @@ namespace SistemaJuridico.Services
                 
                 var prazoStr = dataPrazo.ToString("dd/MM/yyyy");
 
-                // Insere Processo
+                // CORREÇÃO AQUI: Alterado @class para @classificacao e a propriedade no objeto anônimo
                 conn.Execute(@"INSERT INTO processos (id, numero, paciente, juiz, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
-                    VALUES (@id, @num, @pac, @juiz, @class, 'Conhecimento', @dt, @prazo)",
-                    new { id = procId, num = numero, pac = paciente, juiz, class = classificacao, dt = hoje.ToString("dd/MM/yyyy"), prazo = prazoStr }, trans);
+                    VALUES (@id, @num, @pac, @juiz, @classificacao, 'Conhecimento', @dt, @prazo)",
+                    new { 
+                        id = procId, 
+                        num = numero, 
+                        pac = paciente, 
+                        juiz, 
+                        classificacao, // Agora nome da propriedade é válido
+                        dt = hoje.ToString("dd/MM/yyyy"), 
+                        prazo = prazoStr 
+                    }, trans);
 
                 // Insere Réu se houver
                 if (!string.IsNullOrEmpty(reu))
