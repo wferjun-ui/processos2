@@ -1,5 +1,5 @@
 #define MyAppName "Sistema Juridico Pro"
-#define MyAppVersion "2.0"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Setor Juridico"
 #define MyAppExeName "SistemaJuridico.exe"
 
@@ -9,7 +9,7 @@ AppId={{C8686620-1383-4318-97C3-890251148899}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-; Instala na AppData do usuário (Não pede Admin) [cite: 2]
+; Instala na AppData do usuário (Não pede Admin)
 DefaultDirName={userappdata}\{#MyAppName}
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
