@@ -16,7 +16,7 @@ namespace SistemaJuridico.Services
 
         public ConfigService()
         {
-            // FIX: Usa AppData do usuário para garantir permissão de escrita sem Admin
+            // Usa AppData/Local para garantir permissão de escrita sem admin
             _configFolderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SistemaJuridico");
             _configPath = Path.Combine(_configFolderPath, "config.json");
         }
@@ -27,9 +27,13 @@ namespace SistemaJuridico.Services
             try
             {
                 var json = File.ReadAllText(_configPath);
+                if (string.IsNullOrWhiteSpace(json)) return null;
                 return JsonSerializer.Deserialize<AppConfig>(json);
             }
-            catch { return null; }
+            catch 
+            { 
+                return null; 
+            }
         }
 
         public void SaveConfig(string dbPath)
