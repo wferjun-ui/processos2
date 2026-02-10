@@ -11,14 +11,16 @@ namespace SistemaJuridico.Services
     public class DatabaseService
     {
         private readonly string _connectionString;
+        private readonly string _dbPath;
 
-        // Agora recebe o caminho escolhido pelo usuário
         public DatabaseService(string dbFolder)
         {
-            // Garante que a pasta existe
+            if (string.IsNullOrWhiteSpace(dbFolder)) 
+                throw new ArgumentException("Caminho do banco não pode ser vazio");
+
             Directory.CreateDirectory(dbFolder);
-            var dbPath = Path.Combine(dbFolder, "juridico_v5.db");
-            _connectionString = $"Data Source={dbPath}";
+            _dbPath = Path.Combine(dbFolder, "juridico_v5.db");
+            _connectionString = $"Data Source={_dbPath}";
         }
 
         public SqliteConnection GetConnection() => new SqliteConnection(_connectionString);
@@ -28,9 +30,10 @@ namespace SistemaJuridico.Services
             using var conn = GetConnection();
             conn.Open();
             
+            // Otimização WAL
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
 
-            // --- TABELAS ---
+            // 1. Criação das Tabelas (Schema completo do Python)
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, salt TEXT, is_admin INTEGER DEFAULT 0, email TEXT);
@@ -66,19 +69,52 @@ namespace SistemaJuridico.Services
                     FOREIGN KEY(processo_id) REFERENCES processos(id) ON DELETE CASCADE);
             ");
 
-            // --- CORREÇÃO DEFINITIVA DE LOGIN ---
-            // Removemos o usuário admin antigo para recriá-lo do zero. 
-            // Isso evita conflitos de hash antigo vs novo.
+            // 2. Reset Agressivo de Admin (Garante acesso inicial)
+            ResetAdminUser(conn);
+
+            // 3. Backup Automático na Inicialização
+            PerformBackup();
+        }
+
+        private void ResetAdminUser(SqliteConnection conn)
+        {
+            // Apaga para recriar com hash limpo
             conn.Execute("DELETE FROM usuarios WHERE username = 'admin'");
-            
-            // Recria o admin com senha "admin"
             RegistrarUsuario("admin", "admin", "admin@sistema.local", true);
+        }
+
+        public void PerformBackup()
+        {
+            try
+            {
+                var backupFolder = Path.Combine(Path.GetDirectoryName(_dbPath)!, "Backups");
+                Directory.CreateDirectory(backupFolder);
+                
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var backupPath = Path.Combine(backupFolder, $"backup_auto_{timestamp}.db");
+                
+                // Copia o arquivo (SQLite permite cópia mesmo em uso se estiver em WAL, mas idealmente fazemos via API backup se conexão estivesse aberta)
+                // Como aqui é safe copy de arquivo:
+                File.Copy(_dbPath, backupPath, true);
+
+                // Limpeza de backups antigos (> 10)
+                var files = Directory.GetFiles(backupFolder, "*.db")
+                                     .OrderBy(f => new FileInfo(f).CreationTime)
+                                     .ToList();
+                
+                while (files.Count > 10)
+                {
+                    File.Delete(files[0]);
+                    files.RemoveAt(0);
+                }
+            }
+            catch { /* Ignorar erros de backup silenciosamente para não travar boot */ }
         }
 
         public (bool Success, bool IsAdmin, string Username) Login(string username, string password)
         {
             using var conn = GetConnection();
-            var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE username = @u", new { u = username });
+            var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE lower(username) = lower(@u)", new { u = username });
 
             if (user == null) return (false, false, "");
 
@@ -86,12 +122,9 @@ namespace SistemaJuridico.Services
             string storedHash = user.password_hash;
             string inputHash = HashPassword(password, salt);
 
-            // Comparação simples de strings
             if (storedHash == inputHash)
-            {
-                bool isAdmin = (user.is_admin == 1);
-                return (true, isAdmin, user.username);
-            }
+                return (true, user.is_admin == 1, user.username);
+            
             return (false, false, "");
         }
 
@@ -105,12 +138,7 @@ namespace SistemaJuridico.Services
                 INSERT INTO usuarios (id, username, password_hash, salt, is_admin, email) 
                 VALUES (@id, @u, @h, @s, @a, @e)",
                 new { 
-                    id = Guid.NewGuid().ToString(), 
-                    u = username, 
-                    h = hash, 
-                    s = salt, 
-                    a = isAdmin ? 1 : 0, 
-                    e = email 
+                    id = Guid.NewGuid().ToString(), u = username, h = hash, s = salt, a = isAdmin ? 1 : 0, e = email 
                 });
         }
 
@@ -128,7 +156,7 @@ namespace SistemaJuridico.Services
             return Convert.ToHexString(sha256.ComputeHash(combined)).ToLower();
         }
 
-        // --- MÉTODOS DE NEGÓCIO ---
+        // Método Genérico para Salvar Processo (Novo Cadastro)
         public void SalvarNovoProcesso(string numero, string paciente, string juiz, string reu, string classificacao, string usuarioLogado)
         {
             using var conn = GetConnection();
@@ -138,13 +166,14 @@ namespace SistemaJuridico.Services
             {
                 var procId = Guid.NewGuid().ToString();
                 var hoje = DateTime.Now;
+                
+                // Cálculo de Prazo Simples (14 dias)
                 var dataPrazo = hoje.AddDays(14); 
                 if (dataPrazo.DayOfWeek == DayOfWeek.Saturday) dataPrazo = dataPrazo.AddDays(2);
                 if (dataPrazo.DayOfWeek == DayOfWeek.Sunday) dataPrazo = dataPrazo.AddDays(1);
-                
                 var prazoStr = dataPrazo.ToString("dd/MM/yyyy");
 
-                // Corrige o nome do parâmetro @classificacao
+                // FIX: Uso de @classificacao em vez de @class
                 conn.Execute(@"INSERT INTO processos (id, numero, paciente, juiz, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
                     VALUES (@id, @num, @pac, @juiz, @classificacao, 'Conhecimento', @dt, @prazo)",
                     new { id = procId, num = numero, pac = paciente, juiz, classificacao, dt = hoje.ToString("dd/MM/yyyy"), prazo = prazoStr }, trans);
