@@ -1,48 +1,67 @@
-name: Compilar Sistema Juridico .NET
+name: Auto Release e Deploy
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main  # Executa sempre que houver código novo na main
+  workflow_dispatch: # Permite execução manual se necessário
+
+permissions:
+  contents: write # Permissão CRUCIAL para criar Tags e Releases
 
 jobs:
-  build:
+  build-and-release:
     runs-on: windows-latest
 
     env:
       Solution_Path: SistemaJuridico.sln
       Project_Path: SistemaJuridico/SistemaJuridico.csproj
-      Output_Directory: ReleaseOutput
+      DotNet_Output: ReleaseOutput
+      Installer_Output: Output
 
     steps:
-    - name: Checkout do código
-      uses: actions/checkout@v4
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necessário para calcular a versão baseada no histórico
 
-    - name: Configurar .NET 8
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      # 1. Calcula e Cria a Tag Automaticamente
+      - name: Gerar Versão e Tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch # Se não especificar nada no commit, sobe 0.0.1
+          release_branches: main
 
-    - name: Restaurar Dependências
-      run: dotnet restore ${{ env.Solution_Path }}
+      - name: Configurar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-    - name: Compilar e Publicar (Single File)
-      # Compila para um único .exe independente
-      run: |
-        dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ${{ env.Output_Directory }}
+      - name: Restaurar Dependências
+        run: dotnet restore ${{ env.Solution_Path }}
 
-    - name: Instalar Inno Setup
-      run: choco install innosetup
+      # 2. Compila injetando a versão gerada no passo 1
+      - name: Compilar (Injetando Versão)
+        run: |
+          dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=${{ steps.tag_version.outputs.new_version }} -o ${{ env.DotNet_Output }}
 
-    - name: Criar Instalador
-      # Executa o compilador de script do Inno Setup
-      run: ISCC setup.iss
+      - name: Instalar Inno Setup
+        run: choco install innosetup
 
-    - name: Upload da Release
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        files: Output/Instalador_SistemaJuridico_v2.exe
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 3. Cria Instalador injetando a versão no setup.iss via comando
+      - name: Compilar Instalador
+        run: |
+          ISCC /DMyAppVersion="${{ steps.tag_version.outputs.new_version }}" setup.iss
+
+      # 4. Cria a Release e sobe o executável (Sem Artifacts)
+      - name: Criar GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Versão ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+          files: ${{ env.Installer_Output }}/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
