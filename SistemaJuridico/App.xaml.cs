@@ -1,17 +1,20 @@
 using System.Windows;
-using System.IO;
 using SistemaJuridico.Services;
+using SistemaJuridico.Views; // Certifique-se de criar a pasta Views
 
 namespace SistemaJuridico
 {
     public partial class App : Application
     {
-        protected override void OnStartup(StartupEventArgs e)
+        private void Application_Startup(object sender, StartupEventArgs e)
         {
-            base.OnStartup(e);
-            // Garante que o banco existe ao iniciar
+            // 1. Inicializa Banco de Dados
             var db = new DatabaseService();
             db.Initialize();
+
+            // 2. Abre a Tela de Login
+            var loginWindow = new LoginWindow();
+            loginWindow.Show();
         }
     }
 }
