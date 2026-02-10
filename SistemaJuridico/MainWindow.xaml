@@ -23,6 +23,10 @@
                 
                 <Button Command="{Binding CarregarDashboardCommand}" Content="DASHBOARD" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50"/>
                 <Button Command="{Binding NovoProcessoCommand}" Content="NOVO PROCESSO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50"/>
+                
+                <Button Command="{Binding AbrirAdminCommand}" Visibility="{Binding AdminVisibility}" 
+                        Content="ADMINISTRAÇÃO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" Foreground="Purple"/>
+
                 <Separator Margin="0,20"/>
                 <Button Command="{Binding SairCommand}" Content="SAIR" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" Foreground="Red"/>
             </StackPanel>
@@ -41,6 +45,15 @@
 
             <DataGrid Grid.Row="1" ItemsSource="{Binding Processos}" AutoGenerateColumns="False" IsReadOnly="True" materialDesign:DataGridAssist.CellPadding="10">
                 <DataGrid.Columns>
+                    <DataGridTemplateColumn Width="50">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.AbrirDetalhesCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                                        CommandParameter="{Binding Id}" Content="Abrir" Height="25" Padding="5,0"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    
                     <DataGridTextColumn Header="Status" Binding="{Binding StatusTexto}" FontWeight="Bold"/>
                     <DataGridTextColumn Header="Processo" Binding="{Binding Numero}"/>
                     <DataGridTextColumn Header="Paciente" Binding="{Binding Paciente}" Width="*"/>
