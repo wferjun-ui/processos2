@@ -1,6 +1,6 @@
 using System.Windows;
 using SistemaJuridico.Services;
-using SistemaJuridico.Views; // Certifique-se de criar a pasta Views
+using SistemaJuridico.Views;
 
 namespace SistemaJuridico
 {
@@ -8,13 +8,13 @@ namespace SistemaJuridico
     {
         private void Application_Startup(object sender, StartupEventArgs e)
         {
-            // 1. Inicializa Banco de Dados
+            // 1. Garante que o banco de dados existe
             var db = new DatabaseService();
             db.Initialize();
 
-            // 2. Abre a Tela de Login
-            var loginWindow = new LoginWindow();
-            loginWindow.Show();
+            // 2. Abre a tela de Login
+            var login = new LoginWindow();
+            login.Show();
         }
     }
 }
