@@ -25,10 +25,10 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _searchText = "";
 
         public MainViewModel()
-        {
-            _db = new DatabaseService();
-            CarregarDashboard();
-        }
+{
+    _db = App.DB;
+    CarregarDashboard();
+}
 
         [RelayCommand]
         public void NovoProcesso()
