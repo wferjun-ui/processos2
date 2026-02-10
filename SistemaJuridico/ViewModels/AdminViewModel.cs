@@ -8,7 +8,13 @@ using System.Windows;
 
 namespace SistemaJuridico.ViewModels
 {
-    public class UserDto { public string Id { get; set; } public string Email { get; set; } public string Username { get; set; } public bool IsAdmin { get; set; } }
+    public class UserDto 
+    { 
+        public string Id { get; set; } = string.Empty; 
+        public string Email { get; set; } = string.Empty; 
+        public string Username { get; set; } = string.Empty; 
+        public bool IsAdmin { get; set; } 
+    }
 
     public partial class AdminViewModel : ObservableObject
     {
