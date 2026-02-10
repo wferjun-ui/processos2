@@ -14,7 +14,22 @@ using System.Windows.Media;
 
 namespace SistemaJuridico.ViewModels
 {
-    // Modelo para Itens de Saúde na aba de Verificação (Editáveis)
+    // Modelo Interno Completo
+    public class ProcessoCompletoDto
+    {
+        public string Id { get; set; } = "";
+        public string Numero { get; set; } = "";
+        public string Paciente { get; set; } = "";
+        public string Juiz { get; set; } = "";
+        public string GenitorRepNome { get; set; } = "";
+        public string GenitorRepTipo { get; set; } = "";
+        public string Classificacao { get; set; } = "";
+        public string StatusFase { get; set; } = "";
+        public string UltimaAtualizacao { get; set; } = "";
+        public string ObservacaoFixa { get; set; } = "";
+        public string CacheProximoPrazo { get; set; } = "";
+    }
+
     public partial class ItemSaudeCheckModel : ObservableObject
     {
         public string Id { get; set; } = "";
@@ -35,12 +50,9 @@ namespace SistemaJuridico.ViewModels
         public decimal ValorAlvara { get; set; }
         public decimal ValorConta { get; set; } 
         public string Tipo { get; set; } = "";
-        public string Status { get; set; } = ""; // 'lancado' ou 'rascunho'
-        
-        // Helpers Visuais
+        public string Status { get; set; } = ""; 
         public bool IsRascunho => Status == "rascunho";
         public SolidColorBrush CorTexto => IsRascunho ? Brushes.Orange : Brushes.Black;
-        public string IconeStatus => IsRascunho ? "ClockTimeFourOutline" : "CheckCircle";
     }
 
     public partial class ProcessoDetalhesViewModel : ObservableObject
@@ -48,14 +60,14 @@ namespace SistemaJuridico.ViewModels
         private readonly DatabaseService _db;
         private readonly string _processoId;
 
-        // --- CABEÇALHO / SIDEBAR ---
-        [ObservableProperty] private ProcessoModel _processo = new();
+        // --- DADOS DA TELA ---
+        [ObservableProperty] private ProcessoCompletoDto _processo = new(); // Objeto principal
         [ObservableProperty] private string _statusTexto = "";
         [ObservableProperty] private SolidColorBrush _statusCorBrush = Brushes.Gray;
         [ObservableProperty] private string _saldoDisplay = "R$ 0,00";
         [ObservableProperty] private SolidColorBrush _saldoCor = Brushes.Black;
 
-        // --- ABA 1: VERIFICAÇÃO ---
+        // --- ABA VERIFICAÇÃO ---
         [ObservableProperty] private string _obsFixa = "";
         [ObservableProperty] private string _faseProcessual = "";
         [ObservableProperty] private bool _diligenciaRealizada;
@@ -66,22 +78,19 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _proxData = "";
         [ObservableProperty] private string _responsavel = "";
 
-        // Lista de itens de saúde editáveis na verificação
         public ObservableCollection<ItemSaudeCheckModel> ItensVerificacao { get; set; } = new();
         [ObservableProperty] private Visibility _temSaudeVisibility = Visibility.Collapsed;
 
-        // --- ABA 2: HISTÓRICO ---
+        // --- ABA HISTÓRICO ---
         public ObservableCollection<dynamic> HistoricoGeral { get; set; } = new();
 
-        // --- ABA 3: FINANCEIRO ---
-        // Inputs
+        // --- ABA FINANCEIRO ---
         [ObservableProperty] private string _finData = DateTime.Now.ToString("dd/MM/yyyy");
         [ObservableProperty] private string _finTipo = "Alvará"; 
         [ObservableProperty] private string _finNF = "";
         [ObservableProperty] private string _finMov = "";
         [ObservableProperty] private string _finValor = "";
         
-        // Inputs Extras (se não for Alvará)
         [ObservableProperty] private string _finItemNome = "";
         [ObservableProperty] private string _finQtd = "";
         [ObservableProperty] private string _finMes = "";
@@ -89,13 +98,11 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _finObs = "";
         [ObservableProperty] private Visibility _boxExtraVisibility = Visibility.Collapsed;
 
-        // Listas Financeiras
         public ObservableCollection<ContaModel> ListaRascunhos { get; set; } = new();
         public ObservableCollection<ContaModel> ListaHistoricoFin { get; set; } = new();
 
-        // Combos
         public ObservableCollection<string> FasesPossiveis { get; } = new() 
-        { "Conhecimento", "Cumprimento de Sentença", "Recurso", "Arquivado", "Suspenso", "Aguardando Trânsito" };
+        { "Conhecimento", "Cumprimento de Sentença", "Recurso", "Arquivado", "Suspenso", "Aguardando Trânsito", "Cumprimento Provisório" };
 
         public ProcessoDetalhesViewModel(string processoId)
         {
@@ -103,10 +110,7 @@ namespace SistemaJuridico.ViewModels
             _processoId = processoId;
             QuestPDF.Settings.License = LicenseType.Community;
             
-            // Inicializa responsável com usuário logado
             Responsavel = Application.Current.Properties["Usuario"]?.ToString() ?? "Admin";
-            
-            // Calcula próxima data padrão
             var (d, _) = ProcessLogic.CalculateDueDates(DateTime.Now.ToString("dd/MM/yyyy"));
             ProxData = d;
 
@@ -123,37 +127,56 @@ namespace SistemaJuridico.ViewModels
             try
             {
                 using var conn = _db.GetConnection();
+                conn.Open();
+
+                // 1. CARREGAR PROCESSO (Com Aliases para o C# entender)
+                string sqlProc = @"
+                    SELECT 
+                        id, numero, paciente, juiz, 
+                        genitor_rep_nome AS GenitorRepNome, 
+                        genitor_rep_tipo AS GenitorRepTipo,
+                        classificacao, 
+                        status_fase AS StatusFase, 
+                        ultima_atualizacao AS UltimaAtualizacao,
+                        observacao_fixa AS ObservacaoFixa, 
+                        cache_proximo_prazo AS CacheProximoPrazo
+                    FROM processos 
+                    WHERE id = @id";
+
+                var p = conn.QueryFirstOrDefault<ProcessoCompletoDto>(sqlProc, new { id = _processoId });
                 
-                // 1. Dados do Processo
-                var p = conn.QueryFirstOrDefault<dynamic>("SELECT * FROM processos WHERE id = @id", new { id = _processoId });
                 if (p != null)
                 {
-                    Processo = new ProcessoModel { 
-                        Id = p.id, Numero = p.numero, Paciente = p.paciente, 
-                        Juiz = p.juiz, Classificacao = p.classificacao, 
-                        DataPrazo = p.cache_proximo_prazo 
-                    };
-                    ObsFixa = p.observacao_fixa ?? "";
-                    FaseProcessual = p.status_fase ?? "Conhecimento";
+                    Processo = p;
+                    ObsFixa = p.ObservacaoFixa ?? "";
+                    FaseProcessual = p.StatusFase ?? "Conhecimento";
                     
-                    var (txt, cor) = ProcessLogic.CheckPrazoStatus(Processo.DataPrazo);
-                    StatusTexto = txt; StatusCorBrush = cor;
+                    var (txt, cor) = ProcessLogic.CheckPrazoStatus(p.CacheProximoPrazo);
+                    StatusTexto = txt; 
+                    StatusCorBrush = cor;
 
-                    // Mostra aba de itens de saúde apenas se for Saúde
                     TemSaudeVisibility = Processo.Classificacao == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
                 }
 
-                // 2. Itens de Saúde (Para Aba Verificação)
+                // 2. ITENS DE SAÚDE
                 ItensVerificacao.Clear();
-                var itens = conn.Query<ItemSaudeCheckModel>("SELECT id, tipo, nome, qtd, local, data_prescricao as DataPrescricao, is_desnecessario as IsDesnecessario, tem_bloqueio as TemBloqueio FROM itens_saude WHERE processo_id = @id", new { id = _processoId });
+                string sqlItens = @"
+                    SELECT id, tipo, nome, qtd, local, 
+                           data_prescricao AS DataPrescricao, 
+                           is_desnecessario AS IsDesnecessario, 
+                           tem_bloqueio AS TemBloqueio 
+                    FROM itens_saude 
+                    WHERE processo_id = @id";
+                
+                var itens = conn.Query<ItemSaudeCheckModel>(sqlItens, new { id = _processoId });
                 foreach (var i in itens) ItensVerificacao.Add(i);
 
-                // 3. Histórico Geral
+                // 3. HISTÓRICO
                 HistoricoGeral.Clear();
                 var hists = conn.Query("SELECT * FROM verificacoes WHERE processo_id = @id ORDER BY data_hora DESC", new { id = _processoId });
                 foreach (var h in hists) HistoricoGeral.Add(h);
 
-                // 4. Financeiro
+                // 4. FINANCEIRO
                 CarregarFinanceiro(conn);
             }
             catch (Exception ex) { MessageBox.Show("Erro ao carregar: " + ex.Message); }
@@ -202,23 +225,23 @@ namespace SistemaJuridico.ViewModels
                 conn.Open();
                 using var trans = conn.BeginTransaction();
 
-                // 1. Atualizar Processo (Fase, Obs, Prazo)
+                // 1. Atualizar Processo
                 conn.Execute("UPDATE processos SET status_fase=@f, observacao_fixa=@o, cache_proximo_prazo=@p, ultima_atualizacao=@u WHERE id=@id",
                     new { f = FaseProcessual, o = ObsFixa, p = ProxData, u = DateTime.Now.ToString("dd/MM/yyyy"), id = _processoId }, trans);
 
-                // 2. Atualizar Itens de Saúde (Banco de Dados)
+                // 2. Atualizar Itens de Saúde
                 foreach(var item in ItensVerificacao)
                 {
                     conn.Execute("UPDATE itens_saude SET qtd=@q, local=@l, data_prescricao=@d, is_desnecessario=@isd, tem_bloqueio=@tb WHERE id=@id",
                         new { q = item.Qtd, l = item.Local, d = item.DataPrescricao, isd = item.IsDesnecessario ? 1 : 0, tb = item.TemBloqueio ? 1 : 0, id = item.Id }, trans);
                 }
 
-                // 3. Gerar Log Verificação
+                // 3. Gerar Log
                 string snapshot = JsonSerializer.Serialize(ItensVerificacao);
                 string resumo = DiligenciaRealizada ? $"[Dil] {DiligenciaDesc}" : "Verificação de Rotina";
+                if(DiligenciaPendente) resumo += $" | [Pend] {PendenciaDesc}";
                 
-                // Recalcula datas para notificação
-                var (_, notif) = ProcessLogic.CalculateDueDates(ProxData); // Apenas exemplo, usando ProxData como base
+                var (_, notif) = ProcessLogic.CalculateDueDates(ProxData);
 
                 conn.Execute(@"
                     INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, 
@@ -266,9 +289,8 @@ namespace SistemaJuridico.ViewModels
                     nf = FinNF, mov = FinMov, va = valAlvara, vc = valConta, resp = Responsavel 
                 });
 
-            // Limpa campos
             FinValor = ""; FinObs = ""; FinItemNome = "";
-            CarregarDadosCompletos(); // Recarrega listas
+            CarregarDadosCompletos();
         }
 
         [RelayCommand]
@@ -299,8 +321,28 @@ namespace SistemaJuridico.ViewModels
         [RelayCommand]
         public void GerarPDF() 
         {
-             // Implementação básica do PDF similar ao anterior
-             MessageBox.Show("Funcionalidade de PDF mantida (igual ao código anterior).");
+            try
+            {
+                var arquivo = $"Relatorio_{Processo.Numero}_{DateTime.Now:yyyyMMdd}.pdf";
+                var path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), arquivo);
+                Document.Create(container => {
+                    container.Page(page => {
+                        page.Margin(50);
+                        page.Header().Text($"Relatório Processo {Processo.Numero}").FontSize(20).SemiBold().FontColor(QuestPDF.Helpers.Colors.Blue.Medium);
+                        page.Content().PaddingVertical(10).Table(table => {
+                            table.ColumnsDefinition(columns => { columns.ConstantColumn(80); columns.RelativeColumn(); columns.ConstantColumn(80); columns.ConstantColumn(80); });
+                            table.Header(header => { header.Cell().Text("Data").Bold(); header.Cell().Text("Histórico").Bold(); header.Cell().AlignRight().Text("Crédito").Bold(); header.Cell().AlignRight().Text("Débito").Bold(); });
+                            foreach (var item in ListaHistoricoFin) {
+                                table.Cell().Text(item.Data); table.Cell().Text(item.Historico);
+                                table.Cell().AlignRight().Text(item.ValorAlvara > 0 ? $"{item.ValorAlvara:N2}" : "-").FontColor(QuestPDF.Helpers.Colors.Green.Medium);
+                                table.Cell().AlignRight().Text(item.ValorConta > 0 ? $"{item.ValorConta:N2}" : "-").FontColor(QuestPDF.Helpers.Colors.Red.Medium);
+                            }
+                        });
+                    });
+                }).GeneratePdf(path);
+                MessageBox.Show($"PDF gerado:\n{path}");
+            }
+            catch (Exception ex) { MessageBox.Show("Erro: " + ex.Message); }
         }
     }
 }
