@@ -9,7 +9,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
-using System.Windows.Media;
+using System.Windows.Media; // Importante para SolidColorBrush
 
 namespace SistemaJuridico.ViewModels
 {
@@ -28,8 +28,8 @@ namespace SistemaJuridico.ViewModels
         public string Id { get; set; } = "";
         public string Data { get; set; } = "";
         public string Historico { get; set; } = "";
-        public decimal ValorAlvara { get; set; } // Crédito
-        public decimal ValorConta { get; set; }  // Débito
+        public decimal ValorAlvara { get; set; }
+        public decimal ValorConta { get; set; } 
         public string Tipo { get; set; } = "";
     }
 
@@ -42,28 +42,26 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _statusTexto = "";
         [ObservableProperty] private SolidColorBrush _statusCorBrush = Brushes.Gray;
         
-        // Verificação
         [ObservableProperty] private string _obsFixa = "";
         [ObservableProperty] private bool _diligenciaRealizada;
         [ObservableProperty] private string _diligenciaDesc = "";
         [ObservableProperty] private bool _diligenciaPendente;
         [ObservableProperty] private string _pendenciaDesc = "";
 
-        // Financeiro - Inputs
+        // Financeiro
         [ObservableProperty] private string _finData = DateTime.Now.ToString("dd/MM/yyyy");
-        [ObservableProperty] private string _finTipo = "Despesa"; // Alvara ou Despesa
+        [ObservableProperty] private string _finTipo = "Despesa"; 
         [ObservableProperty] private string _finHistorico = "";
         [ObservableProperty] private string _finValor = "";
         [ObservableProperty] private string _finSaldoTotal = "R$ 0,00";
         [ObservableProperty] private SolidColorBrush _finSaldoCor = Brushes.Black;
 
-        // Saúde - Inputs
+        // Saúde
         [ObservableProperty] private string _saudeTipo = "Medicamento";
         [ObservableProperty] private string _saudeNome = "";
         [ObservableProperty] private string _saudeQtd = "";
         [ObservableProperty] private string _saudeFreq = "";
 
-        // Coleções
         public ObservableCollection<dynamic> Historico { get; set; } = new();
         public ObservableCollection<ContaModel> Contas { get; set; } = new();
         public ObservableCollection<ItemSaudeModel> ItensSaude { get; set; } = new();
@@ -72,7 +70,7 @@ namespace SistemaJuridico.ViewModels
         {
             _db = App.DB!;
             _processoId = processoId;
-            QuestPDF.Settings.License = LicenseType.Community; // Licença Community
+            QuestPDF.Settings.License = LicenseType.Community;
             CarregarDados();
         }
 
@@ -80,7 +78,6 @@ namespace SistemaJuridico.ViewModels
         {
             using var conn = _db.GetConnection();
             
-            // 1. Processo Principal
             var pDto = conn.QueryFirstOrDefault<dynamic>("SELECT * FROM processos WHERE id = @id", new { id = _processoId });
             if (pDto != null)
             {
@@ -98,15 +95,11 @@ namespace SistemaJuridico.ViewModels
                 StatusCorBrush = cor;
             }
 
-            // 2. Histórico
             Historico.Clear();
             var hist = conn.Query("SELECT * FROM verificacoes WHERE processo_id = @id ORDER BY data_hora DESC", new { id = _processoId });
             foreach (var h in hist) Historico.Add(h);
 
-            // 3. Itens Saúde
             CarregarSaude(conn);
-
-            // 4. Financeiro
             CarregarFinanceiro(conn);
         }
 
@@ -144,7 +137,6 @@ namespace SistemaJuridico.ViewModels
             FinSaldoCor = saldo >= 0 ? Brushes.Green : Brushes.Red;
         }
 
-        // --- COMANDOS SAÚDE ---
         [RelayCommand]
         public void AdicionarSaude()
         {
@@ -153,7 +145,7 @@ namespace SistemaJuridico.ViewModels
             conn.Execute("INSERT INTO itens_saude (id, processo_id, tipo, nome, qtd, frequencia) VALUES (@id, @pid, @t, @n, @q, @f)",
                 new { id = Guid.NewGuid().ToString(), pid = _processoId, t = SaudeTipo, n = SaudeNome, q = SaudeQtd, f = SaudeFreq });
             
-            SaudeNome = ""; SaudeQtd = ""; // Limpa
+            SaudeNome = ""; SaudeQtd = ""; 
             CarregarSaude(conn);
         }
 
@@ -168,7 +160,6 @@ namespace SistemaJuridico.ViewModels
             }
         }
 
-        // --- COMANDOS FINANCEIRO ---
         [RelayCommand]
         public void AdicionarConta()
         {
@@ -219,7 +210,7 @@ namespace SistemaJuridico.ViewModels
                     container.Page(page =>
                     {
                         page.Margin(50);
-                        // CORREÇÃO: Usando QuestPDF.Helpers.Colors explicitamente para evitar conflito
+                        // Desambiguação de Colors aqui
                         page.Header().Text($"Relatório Financeiro - Processo {Processo.Numero}")
                             .FontSize(20).SemiBold().FontColor(QuestPDF.Helpers.Colors.Blue.Medium);
                         
@@ -245,7 +236,6 @@ namespace SistemaJuridico.ViewModels
                             {
                                 table.Cell().Text(item.Data);
                                 table.Cell().Text(item.Historico);
-                                // CORREÇÃO: Usando QuestPDF.Helpers.Colors explicitamente
                                 table.Cell().AlignRight().Text(item.ValorAlvara > 0 ? $"{item.ValorAlvara:N2}" : "-")
                                     .FontColor(QuestPDF.Helpers.Colors.Green.Medium);
                                 table.Cell().AlignRight().Text(item.ValorConta > 0 ? $"{item.ValorConta:N2}" : "-")
@@ -269,7 +259,6 @@ namespace SistemaJuridico.ViewModels
             }
         }
 
-        // --- COMANDOS GERAIS ---
         [RelayCommand]
         public void SalvarVerificacao()
         {
@@ -300,7 +289,7 @@ namespace SistemaJuridico.ViewModels
                 conn.Execute("UPDATE processos SET cache_proximo_prazo = @p, observacao_fixa = @o WHERE id = @id", 
                     new { p = novoPrazo, o = ObsFixa, id = _processoId });
 
-                MessageBox.Show("Verificação salva e prazo atualizado!", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("Salvo com sucesso!", "Sucesso");
                 
                 DiligenciaRealizada = false;
                 DiligenciaPendente = false;
@@ -311,7 +300,7 @@ namespace SistemaJuridico.ViewModels
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao salvar: " + ex.Message, "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Erro: " + ex.Message);
             }
         }
 
