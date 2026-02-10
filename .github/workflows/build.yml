@@ -1,13 +1,21 @@
-name: Auto Release e Deploy
+name: Deploy Manual e Release
 
 on:
-  push:
-    branches:
-      - main  # Executa sempre que houver código novo na main
-  workflow_dispatch: # Permite execução manual se necessário
+  # Gatilho APENAS manual
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Qual o tipo de atualização?'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch   # v1.0.0 -> v1.0.1 (Correções)
+        - minor   # v1.0.0 -> v1.1.0 (Novas Funcionalidades)
+        - major   # v1.0.0 -> v2.0.0 (Grandes Mudanças)
 
 permissions:
-  contents: write # Permissão CRUCIAL para criar Tags e Releases
+  contents: write # Necessário para criar a Release
 
 jobs:
   build-and-release:
@@ -23,15 +31,16 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Necessário para calcular a versão baseada no histórico
+          fetch-depth: 0 # Importante para ler as tags anteriores
 
-      # 1. Calcula e Cria a Tag Automaticamente
+      # 1. Calcula a próxima versão baseada na sua escolha manual
       - name: Gerar Versão e Tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch # Se não especificar nada no commit, sobe 0.0.1
+          # Usa a opção que você selecionou no botão (patch, minor ou major)
+          default_bump: ${{ github.event.inputs.version_type }} 
           release_branches: main
 
       - name: Configurar .NET 8
@@ -42,7 +51,7 @@ jobs:
       - name: Restaurar Dependências
         run: dotnet restore ${{ env.Solution_Path }}
 
-      # 2. Compila injetando a versão gerada no passo 1
+      # 2. Compila injetando a versão gerada
       - name: Compilar (Injetando Versão)
         run: |
           dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=${{ steps.tag_version.outputs.new_version }} -o ${{ env.DotNet_Output }}
@@ -50,18 +59,18 @@ jobs:
       - name: Instalar Inno Setup
         run: choco install innosetup
 
-      # 3. Cria Instalador injetando a versão no setup.iss via comando
+      # 3. Gera o instalador
       - name: Compilar Instalador
         run: |
           ISCC /DMyAppVersion="${{ steps.tag_version.outputs.new_version }}" setup.iss
 
-      # 4. Cria a Release e sobe o executável (Sem Artifacts)
+      # 4. Cria a Release e sobe o executável
       - name: Criar GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag_version.outputs.new_tag }}
           name: Versão ${{ steps.tag_version.outputs.new_tag }}
-          body: ${{ steps.tag_version.outputs.changelog }}
+          body: "Release gerada manualmente. Tipo: ${{ github.event.inputs.version_type }}"
           files: ${{ env.Installer_Output }}/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
