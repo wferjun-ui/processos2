@@ -1,31 +1,65 @@
-<Window x:Class="SistemaJuridico.Views.LoginWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-        Title="Login - Sistema Jurídico" Height="450" Width="400"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent">
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using SistemaJuridico.Services;
+using System.Windows;
+using System.Windows.Controls;
 
-    <Border Background="White" CornerRadius="15" Margin="10" Effect="{StaticResource MaterialDesignShadowDepth2}">
-        <StackPanel VerticalAlignment="Center" Margin="40">
-            <materialDesign:PackIcon Kind="ScaleBalance" Width="60" Height="60" 
-                                     HorizontalAlignment="Center" Foreground="{StaticResource PrimaryHueMidBrush}"/>
-            
-            <TextBlock Text="ACESSO AO SISTEMA" FontSize="20" FontWeight="Bold" 
-                       HorizontalAlignment="Center" Margin="0,20,0,30" Foreground="#555"/>
+namespace SistemaJuridico.ViewModels
+{
+    public partial class LoginViewModel : ObservableObject
+    {
+        private readonly DatabaseService _db;
 
-            <TextBox Text="{Binding Username}" materialDesign:HintAssist.Hint="Usuário" 
-                     Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,15"/>
-            
-            <PasswordBox x:Name="txtSenha" materialDesign:HintAssist.Hint="Senha" 
-                         Style="{StaticResource MaterialDesignOutlinedPasswordBox}" Margin="0,0,0,30"/>
+        [ObservableProperty] 
+        private string _username = "";
 
-            <Button Content="ENTRAR" Command="{Binding LoginCommand}" 
-                    CommandParameter="{Binding ElementName=txtSenha}"
-                    Height="50" FontSize="16"/>
-            
-            <Button Content="SAIR" Command="{Binding FecharCommand}" 
-                    Style="{StaticResource MaterialDesignFlatButton}" Margin="0,10,0,0" Foreground="Red"/>
-        </StackPanel>
-    </Border>
-</Window>
+        public LoginViewModel()
+        {
+            _db = new DatabaseService();
+        }
+
+        [RelayCommand]
+        public void Login(object parameter)
+        {
+            // O PasswordBox é passado como parâmetro porque a propriedade Password não é bindable por segurança
+            var passwordBox = parameter as PasswordBox;
+            var password = passwordBox?.Password ?? "";
+
+            var result = _db.Login(Username, password);
+
+            if (result.Success)
+            {
+                // Armazena sessão globalmente
+                if (Application.Current != null)
+                {
+                    Application.Current.Properties["UsuarioLogado"] = result.Username;
+                    Application.Current.Properties["IsAdmin"] = result.IsAdmin;
+
+                    // Abre a janela principal
+                    var main = new MainWindow();
+                    Application.Current.MainWindow = main;
+                    main.Show();
+
+                    // Fecha a janela de login
+                    foreach (Window win in Application.Current.Windows)
+                    {
+                        if (win is Views.LoginWindow)
+                        {
+                            win.Close();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("Usuário ou senha incorretos.", "Erro de Acesso", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand]
+        public void Fechar()
+        {
+            Application.Current.Shutdown();
+        }
+    }
+}
