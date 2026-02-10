@@ -11,7 +11,12 @@ namespace SistemaJuridico.ViewModels
         private readonly DatabaseService _db;
         [ObservableProperty] public string _username = "";
 
-        public LoginViewModel() { _db = new DatabaseService(); }
+        // No construtor:
+        public LoginViewModel()
+{
+    // Usa a instância global já inicializada com o caminho correto
+            _db = App.DB; 
+}
 
         [RelayCommand]
         public void Login(object parameter)
