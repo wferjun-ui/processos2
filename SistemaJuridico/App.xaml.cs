@@ -6,19 +6,16 @@ namespace SistemaJuridico
 {
     public partial class App : Application
     {
-        // Nullable para evitar aviso, mas garantido no Startup
         public static DatabaseService? DB { get; private set; }
 
         private void Application_Startup(object sender, StartupEventArgs e)
         {
-            // FIX: Impede que o app feche quando a janela de Setup é fechada
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             var configService = new ConfigService();
             var config = configService.LoadConfig();
             string dbPath = "";
 
-            // 1. Fluxo de Setup (Se config não existir)
             if (config == null || string.IsNullOrEmpty(config.DatabasePath))
             {
                 var setup = new SetupWindow();
@@ -30,7 +27,7 @@ namespace SistemaJuridico
                 }
                 else
                 {
-                    Shutdown(); // Encerra se o usuário cancelar
+                    Shutdown();
                     return;
                 }
             }
@@ -43,16 +40,24 @@ namespace SistemaJuridico
                 return;
             }
 
-            // 2. Inicializa Banco e Reseta Admin
+            // INICIALIZAÇÃO CRÍTICA
+            // Isso vai rodar o DELETE e INSERT do admin
             DB = new DatabaseService(dbPath);
-            DB.Initialize();
+            try 
+            {
+                DB.Initialize(); 
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show($"Erro crítico ao criar banco de dados: {ex.Message}\nO app será fechado.", "Erro Fatal");
+                Shutdown();
+                return;
+            }
 
-            // 3. Abre Login
             var login = new LoginWindow();
             MainWindow = login;
             login.Show();
 
-            // FIX: Agora que a janela principal (Login) está aberta, restaura comportamento padrão
             ShutdownMode = ShutdownMode.OnLastWindowClose;
         }
     }
