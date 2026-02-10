@@ -6,15 +6,15 @@ namespace SistemaJuridico.Services
 {
     public class AppConfig
     {
-        public string DatabasePath { get; set; } = "";
+        public string DatabasePath { get; set; } = string.Empty;
     }
 
     public class ConfigService
     {
-        // Salva o config ao lado do executável
         private readonly string _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
 
-        public AppConfig LoadConfig()
+        // Retorna anulável (AppConfig?) explicitamente
+        public AppConfig? LoadConfig()
         {
             if (!File.Exists(_configPath)) return null;
             try
