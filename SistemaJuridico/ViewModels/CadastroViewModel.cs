@@ -19,10 +19,10 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _classificacao = "Cível";
 
         public CadastroViewModel(Action closeAction)
-        {
-            _db = new DatabaseService();
-            _closeAction = closeAction;
-        }
+{
+    _db = App.DB;
+    _closeAction = closeAction;
+}
 
         [RelayCommand]
         public void Salvar()
