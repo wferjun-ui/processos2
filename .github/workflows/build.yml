@@ -1,0 +1,48 @@
+name: Compilar Sistema Juridico .NET
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      Solution_Path: SistemaJuridico.sln
+      Project_Path: SistemaJuridico/SistemaJuridico.csproj
+      Output_Directory: ReleaseOutput
+
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v4
+
+    - name: Configurar .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restaurar Dependências
+      run: dotnet restore ${{ env.Solution_Path }}
+
+    - name: Compilar e Publicar (Single File)
+      # Compila para um único .exe independente
+      run: |
+        dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ${{ env.Output_Directory }}
+
+    - name: Instalar Inno Setup
+      run: choco install innosetup
+
+    - name: Criar Instalador
+      # Executa o compilador de script do Inno Setup
+      run: ISCC setup.iss
+
+    - name: Upload da Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: Output/Instalador_SistemaJuridico_v2.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
