@@ -4,34 +4,25 @@ using Dapper;
 using SistemaJuridico.Services;
 using System;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
 namespace SistemaJuridico.ViewModels
 {
-    // Modelo usado para exibição na DataGrid (UI)
-    public class ProcessoModel
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Numero { get; set; } = string.Empty;
-        public string Paciente { get; set; } = string.Empty;
-        public string DataPrazo { get; set; } = string.Empty;
-        
-        // Propriedades Visuais (Cores e Textos de Status)
-        public string StatusTexto { get; set; } = string.Empty;
+    public class ProcessoModel {
+        public string Id { get; set; } = "";
+        public string Numero { get; set; } = "";
+        public string Paciente { get; set; } = "";
+        public string DataPrazo { get; set; } = "";
+        public string StatusTexto { get; set; } = "";
         public SolidColorBrush StatusCor { get; set; } = Brushes.Gray;
     }
 
     public partial class MainViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
-
-        [ObservableProperty]
-        private ObservableCollection<ProcessoModel> _processos = new();
-
-        [ObservableProperty]
-        private string _searchText = "";
+        [ObservableProperty] private ObservableCollection<ProcessoModel> _processos = new();
+        [ObservableProperty] private string _searchText = "";
 
         public MainViewModel()
         {
@@ -39,102 +30,56 @@ namespace SistemaJuridico.ViewModels
             CarregarDashboard();
         }
 
-        // Classe auxiliar para mapear o retorno do SQLite (DTO)
-        // Evita erros de tipagem com o Dapper e permite valores nulos do banco
-        private class ProcessoDto
-        {
-            public string id { get; set; } = string.Empty;
-            public string numero { get; set; } = string.Empty;
-            public string paciente { get; set; } = string.Empty;
-            public string? cache_proximo_prazo { get; set; }
-        }
-        [RelayCommand]
-        public void AbrirDetalhes(string id)
-        {
-            var janela = new Views.ProcessoDetalhesWindow();
-                janela.DataContext = new ProcessoDetalhesViewModel(id);
-                janela.ShowDialog();
-            CarregarDashboard(); // Atualiza lista ao voltar
-        }
-
-        // --- COMANDO: ABRIR JANELA DE CADASTRO ---
         [RelayCommand]
         public void NovoProcesso()
         {
-            // Cria a janela de cadastro
-            // Certifique-se de ter criado o arquivo CadastroWindow.xaml conforme instruções anteriores
-            var janela = new CadastroWindow();
+            var win = new Views.CadastroWindow();
+            if (Application.Current.MainWindow != null) 
+                win.Owner = Application.Current.MainWindow;
             
-            // Define a janela principal como "dona" para centralizar corretamente
-            if (Application.Current.MainWindow != null)
-            {
-                janela.Owner = Application.Current.MainWindow;
-            }
-            
-            // Abre como Modal (bloqueia a janela de fundo até fechar)
-            bool? resultado = janela.ShowDialog();
-
-            // Ao fechar a janela, recarrega a lista para mostrar o novo processo
-            CarregarDashboard();
+            win.ShowDialog();
+            CarregarDashboard(); // Atualiza a lista ao voltar
         }
 
-        // --- COMANDO: CARREGAR DASHBOARD ---
+        [RelayCommand]
+        public void Sair()
+        {
+            var login = new Views.LoginWindow();
+            login.Show();
+            Application.Current.MainWindow.Close();
+        }
+
         [RelayCommand]
         public void CarregarDashboard()
         {
             Processos.Clear();
             using var conn = _db.GetConnection();
-
-            // SQL Base
+            
             var sql = "SELECT id, numero, paciente, cache_proximo_prazo FROM processos";
+            if (!string.IsNullOrEmpty(SearchText)) sql += " WHERE numero LIKE @q OR paciente LIKE @q";
             
-            // Filtro de Busca (Lógica portada do Python source: 181)
-            if (!string.IsNullOrEmpty(SearchText))
-            {
-                sql += " WHERE numero LIKE @q OR paciente LIKE @q";
-            }
-            
-            // Ordenação por prazo (opcional, mas recomendada para UX)
-            sql += " ORDER BY cache_proximo_prazo ASC";
-
-            // Executa a query mapeando para o DTO
-            var dados = conn.Query<ProcessoDto>(sql, new { q = $"%{SearchText}%" });
+            var dados = conn.Query<dynamic>(sql, new { q = $"%{SearchText}%" });
 
             foreach (var item in dados)
             {
-                var (texto, cor) = CalcularStatus(item.cache_proximo_prazo);
-
-                Processos.Add(new ProcessoModel
-                {
-                    Id = item.id,
-                    Numero = item.numero,
-                    Paciente = item.paciente,
-                    // Garante que não passamos null para a View
-                    DataPrazo = item.cache_proximo_prazo ?? "Sem Data",
-                    StatusTexto = texto,
-                    StatusCor = cor
+                string prazo = item.cache_proximo_prazo;
+                var (txt, cor) = CalcularStatus(prazo);
+                Processos.Add(new ProcessoModel {
+                    Id = item.id, Numero = item.numero, Paciente = item.paciente,
+                    DataPrazo = prazo ?? "--", StatusTexto = txt, StatusCor = cor
                 });
             }
         }
 
-        // --- LÓGICA DE NEGÓCIO: CÁLCULO DE PRAZOS ---
-        // Portado de ProcessLogic.check_prazo_status (source: 53-54)
-        private (string, SolidColorBrush) CalcularStatus(string? dataStr)
+        private (string, SolidColorBrush) CalcularStatus(string? dt)
         {
-            if (string.IsNullOrEmpty(dataStr)) return ("Sem Prazo", Brushes.Gray);
-
-            // Tenta converter a string de data (dd/MM/yyyy) para DateTime
-            if (DateTime.TryParseExact(dataStr, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime prazo))
-            {
-                var dias = (prazo.Date - DateTime.Now.Date).TotalDays;
-                
+            if (DateTime.TryParse(dt, out DateTime d)) {
+                var dias = (d - DateTime.Now).TotalDays;
                 if (dias < 0) return ("ATRASADO", Brushes.Red);
-                if (dias == 0) return ("VENCE HOJE", Brushes.OrangeRed);
-                if (dias <= 7) return ($"Vence em {dias} dias", Brushes.Goldenrod); // Amarelo escuro para melhor leitura
+                if (dias <= 7) return ($"Vence em {dias:F0} dias", Brushes.Orange);
                 return ("No Prazo", Brushes.Green);
             }
-            
-            return ("Data Inválida", Brushes.Gray);
+            return ("--", Brushes.Gray);
         }
     }
 }
