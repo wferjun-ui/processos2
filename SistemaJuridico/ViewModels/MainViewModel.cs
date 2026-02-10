@@ -48,6 +48,14 @@ namespace SistemaJuridico.ViewModels
             public string paciente { get; set; } = string.Empty;
             public string? cache_proximo_prazo { get; set; }
         }
+        [RelayCommand]
+        public void AbrirDetalhes(string id)
+        {
+            var janela = new Views.ProcessoDetalhesWindow();
+                janela.DataContext = new ProcessoDetalhesViewModel(id);
+                janela.ShowDialog();
+            CarregarDashboard(); // Atualiza lista ao voltar
+        }
 
         // --- COMANDO: ABRIR JANELA DE CADASTRO ---
         [RelayCommand]
