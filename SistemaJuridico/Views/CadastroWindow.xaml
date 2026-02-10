@@ -2,30 +2,101 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-        Title="Novo Processo" Height="550" Width="500"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
-
-    <Grid Margin="20">
-        <StackPanel>
-            <TextBlock Text="Novo Processo" FontSize="20" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}" Margin="0,0,0,20"/>
-
-            <TextBox Text="{Binding Numero, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Número CNJ (apenas números)" Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,15"/>
-            <TextBox Text="{Binding Paciente}" materialDesign:HintAssist.Hint="Nome do Paciente/Cliente" Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,15"/>
+        Title="Novo Processo" Height="750" Width="950" 
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}" TextElement.Foreground="{DynamicResource MaterialDesignBody}">
+    
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="30">
+            <TextBlock Text="DADOS CADASTRAIS" FontSize="20" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}" Margin="0,0,0,20"/>
             
-            <Grid Margin="0,0,0,15">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{Binding Juiz}" materialDesign:HintAssist.Hint="Juiz / Vara" Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-                <ComboBox Grid.Column="2" Text="{Binding Classificacao}" materialDesign:HintAssist.Hint="Classificação" Style="{StaticResource MaterialDesignOutlinedComboBox}">
-                    <ComboBoxItem Content="Cível" IsSelected="True"/>
-                    <ComboBoxItem Content="Família"/>
-                    <ComboBoxItem Content="Saúde"/>
-                    <ComboBoxItem Content="Criminal"/>
-                </ComboBox>
-            </Grid>
-            
-            <TextBox Text="{Binding Reu}" materialDesign:HintAssist.Hint="Réu / Parte Contrária" Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,0,20"/>
+            <materialDesign:Card Padding="20" Margin="0,0,0,20" UniformCornerRadius="8">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,15,0">
+                            <TextBox Text="{Binding Numero, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Número do Processo (CNJ)" Style="{StaticResource MaterialDesignOutlinedTextBox}" FontSize="14" FontWeight="Bold"/>
+                            <CheckBox IsChecked="{Binding IsAntigo}" Content="Processo Antigo / Outro Formato" Margin="0,5,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Text="{Binding Juiz}" materialDesign:HintAssist.Hint="Juiz / Vara" Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    </Grid>
 
-            <Button Content="SALVAR PROCESSO" Command="{Binding SalvarCommand}" Height="50"/>
+                    <Grid Margin="0,15">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding Paciente}" materialDesign:HintAssist.Hint="Nome do Paciente (Parte Autora)" Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,15,0"/>
+                        <ComboBox Grid.Column="1" Text="{Binding Classificacao}" materialDesign:HintAssist.Hint="Classificação" Style="{StaticResource MaterialDesignOutlinedComboBox}">
+                            <ComboBoxItem Content="Cível"/>
+                            <ComboBoxItem Content="Saúde"/>
+                            <ComboBoxItem Content="Família"/>
+                            <ComboBoxItem Content="Fazenda Pública"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <ComboBox Text="{Binding GenitorTipo}" Style="{StaticResource MaterialDesignOutlinedComboBox}" Width="140" Margin="0,0,15,0">
+                            <ComboBoxItem Content="Genitor"/>
+                            <ComboBoxItem Content="Representante"/>
+                        </ComboBox>
+                        <TextBox Grid.Column="1" Text="{Binding GenitorNome}" materialDesign:HintAssist.Hint="Nome do Responsável Legal" Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    </Grid>
+                </StackPanel>
+            </materialDesign:Card>
+
+            <TextBlock Text="RÉUS / PARTE CONTRÁRIA" FontWeight="Bold" Foreground="Gray" Margin="5,0,0,5"/>
+            <ItemsControl ItemsSource="{Binding Reus}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,5">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding Nome}" materialDesign:HintAssist.Hint="Nome do Réu"/>
+                            <Button Grid.Column="1" Command="{Binding DataContext.RemoveReuCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Style="{StaticResource MaterialDesignFlatButton}" Content="{materialDesign:PackIcon Delete}" Foreground="Red" ToolTip="Remover"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Command="{Binding AddReuCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Content="ADICIONAR RÉU" HorizontalAlignment="Left" Margin="0,10,0,20"/>
+
+            <StackPanel Visibility="{Binding SaudeVisibility}">
+                <Separator Margin="0,10"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10">
+                    <materialDesign:PackIcon Kind="MedicalBag" VerticalAlignment="Center" Foreground="Teal"/>
+                    <TextBlock Text="ITENS DE SAÚDE / TUTELA" FontWeight="Bold" Foreground="Teal" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <ItemsControl ItemsSource="{Binding ItensSaude}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <materialDesign:Card Padding="10" Margin="0,5" Background="#F0FDFA" UniformCornerRadius="5">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <ComboBox Text="{Binding Tipo}" materialDesign:HintAssist.Hint="Tipo">
+                                            <ComboBoxItem Content="Medicamento"/><ComboBoxItem Content="Terapia"/><ComboBoxItem Content="Cirurgia"/><ComboBoxItem Content="Outros"/>
+                                        </ComboBox>
+                                        <TextBox Grid.Column="1" Text="{Binding Nome}" materialDesign:HintAssist.Hint="Nome do Item / Procedimento" Margin="10,0"/>
+                                        <Button Grid.Column="2" Command="{Binding DataContext.RemoveSaudeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="{materialDesign:PackIcon Close}" Style="{StaticResource MaterialDesignIconForegroundButton}" Foreground="Red"/>
+                                    </Grid>
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBox Text="{Binding Qtd}" materialDesign:HintAssist.Hint="Qtd" Margin="0,0,5,0"/>
+                                        <ComboBox Grid.Column="1" Text="{Binding Frequencia}" materialDesign:HintAssist.Hint="Frequência" Margin="5,0">
+                                            <ComboBoxItem Content="Mensal"/><ComboBoxItem Content="Semanal"/><ComboBoxItem Content="Diário"/>
+                                        </ComboBox>
+                                        <ComboBox Grid.Column="2" Text="{Binding Local}" materialDesign:HintAssist.Hint="Local" Margin="5,0">
+                                            <ComboBoxItem Content="Clínica"/><ComboBoxItem Content="Home Care"/><ComboBoxItem Content="SUS"/><ComboBoxItem Content="Particular"/>
+                                        </ComboBox>
+                                        <TextBox Grid.Column="3" Text="{Binding Data}" materialDesign:HintAssist.Hint="Data Início" Margin="5,0,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </materialDesign:Card>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Command="{Binding AddSaudeCommand}" Content="ADICIONAR ITEM" Style="{StaticResource MaterialDesignOutlinedButton}" HorizontalAlignment="Left" Foreground="Teal" BorderBrush="Teal"/>
+            </StackPanel>
+
+            <Button Command="{Binding SalvarCommand}" Content="SALVAR PROCESSO" Height="50" Margin="0,30,0,0" FontSize="16"/>
         </StackPanel>
-    </Grid>
+    </ScrollViewer>
 </Window>
