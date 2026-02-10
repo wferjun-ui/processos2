@@ -16,26 +16,45 @@ namespace SistemaJuridico.Services
             if (string.IsNullOrEmpty(value)) return "";
             string v = Regex.Replace(value, @"\D", "");
             if (v.Length > 20) v = v.Substring(0, 20);
+            // Formatação visual simples
             if (v.Length > 16) return $"{v[..7]}-{v.Substring(7, 2)}.{v.Substring(9, 4)}.{v.Substring(13, 1)}.{v.Substring(14, 2)}.{v[16..]}";
             return v; 
         }
 
-        // Lógica Exata do Python: 14 dias + Ajuste para Segunda-feira
+        // Lógica Exata do Python:
+        // Se manualDateStr existe, ele É o prazo, e a notificação é 7 dias antes.
+        // Se não, calcula 14 dias + ajuste para não cair no Domingo (Python weekday 6).
         public static (string proximoPrazo, string dataNotificacao) CalculateDueDates(string? dataBaseStr, string? manualDateStr = null)
         {
-            if (!string.IsNullOrWhiteSpace(manualDateStr) && DateTime.TryParseExact(manualDateStr, "dd/MM/yyyy", null, DateTimeStyles.None, out DateTime manual))
-                return (manual.ToString("dd/MM/yyyy"), manual.AddDays(-7).ToString("dd/MM/yyyy"));
+            try 
+            {
+                // 1. Prioridade Manual (igual Python)
+                if (!string.IsNullOrWhiteSpace(manualDateStr) && DateTime.TryParseExact(manualDateStr, "dd/MM/yyyy", null, DateTimeStyles.None, out DateTime manual))
+                {
+                    return (manual.ToString("dd/MM/yyyy"), manual.AddDays(-7).ToString("dd/MM/yyyy"));
+                }
 
-            DateTime baseDate = DateTime.Now;
-            if (DateTime.TryParseExact(dataBaseStr, "dd/MM/yyyy", null, DateTimeStyles.None, out DateTime parsed)) baseDate = parsed;
+                // 2. Cálculo Automático
+                DateTime baseDate = DateTime.Now;
+                if (!string.IsNullOrWhiteSpace(dataBaseStr) && DateTime.TryParseExact(dataBaseStr, "dd/MM/yyyy", null, DateTimeStyles.None, out DateTime parsed)) 
+                    baseDate = parsed;
 
-            DateTime futureDate = baseDate.AddDays(14);
-            int pythonWeekday = (int)futureDate.DayOfWeek == 0 ? 6 : (int)futureDate.DayOfWeek - 1; // Dom=6 no Python
-            int daysAhead = (7 - pythonWeekday) % 7;
-            if (daysAhead == 0) daysAhead = 7; 
+                DateTime futureDate = baseDate.AddDays(14);
+                // Python: weekday() -> Mon=0...Sun=6. C# DayOfWeek -> Sun=0...Sat=6
+                // Conversão C# para lógica Python:
+                int cSharpDay = (int)futureDate.DayOfWeek; // 0=Dom
+                int pythonWeekday = cSharpDay == 0 ? 6 : cSharpDay - 1; 
 
-            DateTime proximoPrazo = futureDate.AddDays(daysAhead);
-            return (proximoPrazo.ToString("dd/MM/yyyy"), proximoPrazo.AddDays(-7).ToString("dd/MM/yyyy"));
+                int daysAhead = (7 - pythonWeekday) % 7;
+                if (daysAhead == 0) daysAhead = 7; 
+
+                DateTime proximoPrazo = futureDate.AddDays(daysAhead);
+                return (proximoPrazo.ToString("dd/MM/yyyy"), proximoPrazo.AddDays(-7).ToString("dd/MM/yyyy"));
+            }
+            catch
+            {
+                return ("", "");
+            }
         }
 
         public static (string texto, SolidColorBrush cor) CheckPrazoStatus(string proximoPrazoStr)
@@ -55,12 +74,28 @@ namespace SistemaJuridico.Services
         public static decimal ParseMoney(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return 0;
-            string clean = Regex.Replace(value, @"[^\d,]", "");
-            if (decimal.TryParse(clean, NumberStyles.Number, new CultureInfo("pt-BR"), out decimal result)) return result;
+            // Remove tudo que não é número ou virgula/ponto
+            // Python logic: clean = clean.replace(".", "").replace(",", ".") -> Decimal(clean)
+            // C# Culture PT-BR espera vírgula como decimal.
+            
+            // Remove R$ e espaços
+            string v = value.Replace("R$", "").Replace(" ", "").Trim();
+            
+            // Se tiver pontos de milhar (ex: 1.000,00), remove os pontos
+            if (v.Contains(",") && v.Contains(".")) v = v.Replace(".", "");
+            // Se tiver apenas ponto e for formato americano (1000.50), troca por virgula
+            else if (v.Contains(".") && !v.Contains(",")) v = v.Replace(".", ",");
+
+            if (decimal.TryParse(v, NumberStyles.Any, new CultureInfo("pt-BR"), out decimal result)) return result;
             return 0;
         }
 
-        // Geração de PDF (Replicando o layout de tabela do Python com QuestPDF)
+        public static string FormatMoney(decimal value)
+        {
+            return value.ToString("C2", new CultureInfo("pt-BR"));
+        }
+
+        // Geração de PDF (Layout Tabular igual Python ReportLab)
         public static void GeneratePdfReport(string processoNum, string paciente, IEnumerable<dynamic> contas, string path)
         {
             QuestPDF.Settings.License = LicenseType.Community;
@@ -77,12 +112,12 @@ namespace SistemaJuridico.Services
                     
                     page.Content().PaddingVertical(10).Table(table => {
                         table.ColumnsDefinition(columns => {
-                            columns.ConstantColumn(70); // Data
-                            columns.ConstantColumn(80); // Mov
-                            columns.RelativeColumn();   // Histórico
-                            columns.ConstantColumn(80); // Crédito
-                            columns.ConstantColumn(80); // Débito
-                            columns.ConstantColumn(80); // Saldo
+                            columns.ConstantColumn(70); 
+                            columns.ConstantColumn(80); 
+                            columns.RelativeColumn();   
+                            columns.ConstantColumn(80); 
+                            columns.ConstantColumn(80); 
+                            columns.ConstantColumn(80); 
                         });
 
                         table.Header(header => {
@@ -96,19 +131,26 @@ namespace SistemaJuridico.Services
 
                         decimal saldo = 0, totalCred = 0, totalDeb = 0;
                         foreach (var c in contas) {
-                            decimal cred = (decimal)c.valor_alvara;
-                            decimal deb = (decimal)c.valor_conta;
-                            saldo += (cred - deb); totalCred += cred; totalDeb += deb;
+                            decimal cred = (decimal)(c.valor_alvara ?? 0.0);
+                            decimal deb = (decimal)(c.valor_conta ?? 0.0);
+                            
+                            // Lógica de saldo igual Python
+                            saldo += (cred - deb); 
+                            totalCred += cred; 
+                            totalDeb += deb;
 
-                            table.Cell().Element(CellStyle).Text(c.data_movimentacao);
-                            table.Cell().Element(CellStyle).Text(c.mov_processo ?? "-");
-                            table.Cell().Element(CellStyle).Text(c.historico);
+                            string hist = c.historico;
+                            string data = c.data_movimentacao;
+                            string mov = c.mov_processo ?? "-";
+
+                            table.Cell().Element(CellStyle).Text(data);
+                            table.Cell().Element(CellStyle).Text(mov);
+                            table.Cell().Element(CellStyle).Text(hist);
                             table.Cell().Element(CellStyle).AlignRight().Text(cred > 0 ? $"{cred:N2}" : "-").FontColor(Colors.Green.Medium);
                             table.Cell().Element(CellStyle).AlignRight().Text(deb > 0 ? $"{deb:N2}" : "-").FontColor(Colors.Red.Medium);
                             table.Cell().Element(CellStyle).AlignRight().Text($"{saldo:N2}").Bold();
                         }
                         
-                        // Linha de Totais
                         table.Cell().ColumnSpan(3).Element(HeaderStyle).AlignRight().Text("TOTAIS:").Bold();
                         table.Cell().Element(HeaderStyle).AlignRight().Text($"{totalCred:N2}").FontColor(Colors.Green.Medium);
                         table.Cell().Element(HeaderStyle).AlignRight().Text($"{totalDeb:N2}").FontColor(Colors.Red.Medium);
