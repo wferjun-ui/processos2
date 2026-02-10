@@ -8,7 +8,9 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon />
     <StartupObject />
-    <Version>1.5.0</Version> 
+    <Version>1.0.0</Version>
+    <Authors>Setor Juridico</Authors>
+    <Company>Sua Empresa</Company>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,8 +18,8 @@
     <PackageReference Include="Dapper" Version="2.1.28" />
     <PackageReference Include="MaterialDesignThemes" Version="4.9.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
-    <PackageReference Include="Serilog" Version="3.1.1" />
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="QuestPDF" Version="2023.12.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.0" />
   </ItemGroup>
 
 </Project>
