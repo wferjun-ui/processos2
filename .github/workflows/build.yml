@@ -1,7 +1,6 @@
 name: Deploy Manual e Release
 
 on:
-  # Gatilho MANUAL: Você clica no botão para gerar a versão
   workflow_dispatch:
     inputs:
       version_type:
@@ -10,12 +9,12 @@ on:
         default: 'patch'
         type: choice
         options:
-        - patch   # v1.0.0 -> v1.0.1 (Correções)
-        - minor   # v1.0.0 -> v1.1.0 (Novidades)
-        - major   # v1.0.0 -> v2.0.0 (Mudança Grande)
+        - patch
+        - minor
+        - major
 
 permissions:
-  contents: write # Permissão para criar a Release e subir o arquivo
+  contents: write
 
 jobs:
   build-and-release:
@@ -28,13 +27,11 @@ jobs:
       Installer_Output: Output
 
     steps:
-      # 1. Baixa o seu código
       - name: Checkout do código
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Gera o número da versão (ex: v1.0.5) baseado no histórico
       - name: Gerar Versão e Tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.1
@@ -43,32 +40,31 @@ jobs:
           default_bump: ${{ github.event.inputs.version_type }}
           release_branches: main
 
-      # 3. Instala o ambiente .NET 8 (Compilador C#)
       - name: Configurar .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      # 4. Baixa as dependências (MaterialDesign, SQLite, QuestPDF, etc)
-      # Isso lê o arquivo .csproj e baixa tudo automaticamente
       - name: Restaurar Dependências
         run: dotnet restore ${{ env.Solution_Path }}
 
-      # 5. Compila o Executável (Injetando o número da versão)
       - name: Compilar (Publicar)
+        shell: pwsh
         run: |
-          dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=${{ steps.tag_version.outputs.new_version }} -o ${{ env.DotNet_Output }}
+          $ver = "${{ steps.tag_version.outputs.new_version }}"
+          if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "1.0.0" }
+          dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=$ver -o ${{ env.DotNet_Output }}
 
-      # 6. Instala a ferramenta de criar instalador
       - name: Instalar Inno Setup
         run: choco install innosetup
 
-      # 7. Cria o Instalador (Injetando o mesmo número de versão)
       - name: Compilar Instalador
+        shell: pwsh
         run: |
-          ISCC /DMyAppVersion="${{ steps.tag_version.outputs.new_version }}" setup.iss
+          $ver = "${{ steps.tag_version.outputs.new_version }}"
+          if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "1.0.0" }
+          ISCC /DMyAppVersion="$ver" setup.iss
 
-      # 8. Cria a Release no GitHub e anexa o arquivo .exe
       - name: Criar GitHub Release
         uses: softprops/action-gh-release@v1
         with:
