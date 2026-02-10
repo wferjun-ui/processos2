@@ -72,14 +72,11 @@ namespace SistemaJuridico.Services
                 ", transaction: transaction);
 
                 // 2. RESET FORÇADO DO ADMIN (ATÔMICO NA MESMA TRANSAÇÃO)
-                // Remove admin anterior para garantir limpeza
                 conn.Execute("DELETE FROM usuarios WHERE lower(username) = 'admin'", transaction: transaction);
 
-                // Gera credenciais novas
                 var salt = GenerateSalt();
                 var hash = HashPassword("admin", salt);
 
-                // Insere o admin novo
                 conn.Execute(@"
                     INSERT INTO usuarios (id, username, password_hash, salt, is_admin, email) 
                     VALUES (@id, 'admin', @h, @s, 1, 'admin@sistema.local')",
@@ -100,7 +97,6 @@ namespace SistemaJuridico.Services
         public (bool Success, bool IsAdmin, string Username) Login(string username, string password)
         {
             using var conn = GetConnection();
-            // Busca usuário ignorando maiúsculas/minúsculas
             var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE lower(username) = lower(@u)", new { u = username });
 
             if (user == null) return (false, false, "");
@@ -117,7 +113,6 @@ namespace SistemaJuridico.Services
             return (false, false, "");
         }
 
-        // Método auxiliar para criar outros usuários (fora da inicialização)
         public void RegistrarUsuario(string username, string password, string email, bool isAdmin)
         {
             var salt = GenerateSalt();
