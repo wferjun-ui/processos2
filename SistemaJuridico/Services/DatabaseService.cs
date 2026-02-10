@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -28,10 +29,10 @@ namespace SistemaJuridico.Services
         {
             using var conn = GetConnection();
             conn.Open();
-            // Réplica da otimização do Python
+            // Otimizações do Python (WAL Mode)
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;");
 
-            // Schema exato do Python
+            // Schema Idêntico ao Python
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, 
@@ -81,13 +82,12 @@ namespace SistemaJuridico.Services
             if (count == 0)
             {
                 var salt = GenerateSalt();
-                var hash = HashPassword("admin", salt); // Senha padrão admin
+                var hash = HashPassword("admin", salt);
                 conn.Execute("INSERT INTO usuarios (id, username, password_hash, salt, is_admin, email) VALUES (@id, 'admin', @h, @s, 1, 'admin@sistema.local')",
                     new { id = Guid.NewGuid().ToString(), h = hash, s = salt });
             }
         }
 
-        // Réplica da lógica de Backup
         public void PerformBackup()
         {
             try {
@@ -95,14 +95,13 @@ namespace SistemaJuridico.Services
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 File.Copy(_dbPath, Path.Combine(_backupFolder, $"backup_auto_{timestamp}.db"), true);
                 
-                // Limpeza de backups antigos
+                // Mantém apenas os 10 últimos backups
                 var files = new DirectoryInfo(_backupFolder).GetFiles("*.db")
                     .OrderByDescending(f => f.CreationTime).Skip(10);
                 foreach (var f in files) f.Delete();
             } catch {}
         }
 
-        // Métodos auxiliares de criptografia (iguais ao Python hashlib + secrets)
         public string GenerateSalt() => Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLower();
         
         public string HashPassword(string password, string salt) {
@@ -112,14 +111,46 @@ namespace SistemaJuridico.Services
 
         public (bool Success, bool IsAdmin, string Username) Login(string username, string password) {
             using var conn = GetConnection();
-            var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE username = @u", new { u = username });
+            var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE username = @u OR email = @u", new { u = username });
+            
             if (user == null) return (false, false, "");
             
-            string dbHash = user.password_hash;
+            // Verifica se o usuário tem senha definida (Fluxo de Primeiro Acesso do Python)
+            if (string.IsNullOrEmpty(user.password_hash)) return (false, false, "");
+
             string inputHash = HashPassword(password, user.salt ?? "");
+            if (user.password_hash == inputHash) return (true, user.is_admin == 1, user.username);
             
-            if (dbHash == inputHash) return (true, user.is_admin == 1, user.username);
             return (false, false, "");
+        }
+
+        // Feature Python: Registrar e-mail autorizado
+        public bool AuthorizeEmail(string email, bool isAdmin) {
+            using var conn = GetConnection();
+            try {
+                conn.Execute("INSERT INTO usuarios (id, email, username, is_admin) VALUES (@id, @e, @e, @a)",
+                    new { id = Guid.NewGuid().ToString(), e = email, a = isAdmin ? 1 : 0 });
+                return true;
+            } catch { return false; }
+        }
+
+        // Feature Python: Completar cadastro (Primeiro Acesso)
+        public string CompleteRegistration(string email, string newUser, string newPass) {
+            using var conn = GetConnection();
+            var user = conn.QueryFirstOrDefault("SELECT id FROM usuarios WHERE email = @e", new { e = email });
+            if (user == null) return "E-mail não autorizado.";
+
+            // Se mudou o username, verifica colisão
+            if (email != newUser) {
+                var exists = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios WHERE username = @u", new { u = newUser });
+                if (exists > 0) return "Nome de usuário já existe.";
+            }
+
+            var salt = GenerateSalt();
+            var hash = HashPassword(newPass, salt);
+            conn.Execute("UPDATE usuarios SET username=@u, password_hash=@h, salt=@s WHERE email=@e",
+                new { u = newUser, h = hash, s = salt, e = email });
+            return "OK";
         }
     }
 }
