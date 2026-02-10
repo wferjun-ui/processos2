@@ -11,7 +11,19 @@ namespace SistemaJuridico.ViewModels
 {
     // DTOs auxiliares
     public partial class ReuDto : ObservableObject { [ObservableProperty] private string _nome = ""; }
-    
+
+    // --- CLASSE QUE FALTAVA ---
+    public partial class ItemCadastroDto : ObservableObject 
+    {
+        [ObservableProperty] private string _tipo = "Medicamento";
+        [ObservableProperty] private string _nome = "";
+        [ObservableProperty] private string _qtd = "";
+        [ObservableProperty] private string _frequencia = "Mensal";
+        [ObservableProperty] private string _local = "Clínica";
+        [ObservableProperty] private string _data = "";
+    }
+    // --------------------------
+
     public partial class CadastroViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
