@@ -15,10 +15,8 @@ namespace SistemaJuridico.ViewModels
         private readonly DatabaseService _db;
         private readonly string _processoId;
 
-        // Inicializamos com 'new()' para evitar nulos
+        // Propriedades devidamente inicializadas
         [ObservableProperty] private ProcessoModel _processo = new();
-        
-        // Inicializamos textos com string.Empty ("")
         [ObservableProperty] private string _statusTexto = "";
         [ObservableProperty] private SolidColorBrush _statusCorBrush = Brushes.Gray;
         
@@ -30,54 +28,51 @@ namespace SistemaJuridico.ViewModels
         
         public ObservableCollection<dynamic> Historico { get; set; } = new();
 
-public ProcessoDetalhesViewModel(string processoId)
-{
-    _db = App.DB;
-    _processoId = processoId;
-    CarregarDados();
-}
+        public ProcessoDetalhesViewModel(string processoId)
+        {
+            _db = App.DB!;
+            _processoId = processoId;
+            CarregarDados();
+        }
 
         private void CarregarDados()
         {
             using var conn = _db.GetConnection();
             
-            // Tenta buscar o processo
+            // DTO dinâmico para leitura segura
             var pDto = conn.QueryFirstOrDefault<dynamic>("SELECT * FROM processos WHERE id = @id", new { id = _processoId });
 
-            // Proteção contra nulos (CS8602)
             if (pDto != null)
             {
-                // Conversão segura lidando com possíveis nulos do banco
+                // Conversão segura de nulos
                 string dataPrazo = pDto.cache_proximo_prazo ?? "";
-
+                
                 Processo = new ProcessoModel 
                 { 
                     Id = pDto.id ?? "", 
                     Numero = pDto.numero ?? "", 
                     Paciente = pDto.paciente ?? "", 
-                    DataPrazo = dataPrazo
+                    DataPrazo = dataPrazo 
                 };
                 
-                // Conversão segura para string
-                ObsFixa = (string?)pDto.observacao_fixa ?? "";
+                ObsFixa = pDto.observacao_fixa ?? "";
 
-                // Calcula Status
                 var (txt, cor) = CalcularStatus(Processo.DataPrazo);
                 StatusTexto = txt;
                 StatusCorBrush = cor;
             }
             else
             {
-                // Se não achar o processo, define padrão para evitar crash
-                Processo = new ProcessoModel { Paciente = "Processo não encontrado" };
-                StatusTexto = "ERRO";
-                StatusCorBrush = Brushes.Red;
+                Processo = new ProcessoModel { Paciente = "Não encontrado" };
             }
 
-            // Carrega Histórico
+            // Histórico
             Historico.Clear();
             var hist = conn.Query("SELECT * FROM verificacoes WHERE processo_id = @id ORDER BY data_hora DESC", new { id = _processoId });
-            foreach (var h in hist) Historico.Add(h);
+            foreach (var h in hist)
+            {
+                Historico.Add(h);
+            }
         }
         
         [RelayCommand]
@@ -88,8 +83,13 @@ public ProcessoDetalhesViewModel(string processoId)
                 using var conn = _db.GetConnection();
                 var usuario = Application.Current.Properties["Usuario"]?.ToString() ?? "Sistema";
                 
-                // +14 dias
-                var novoPrazo = DateTime.Now.AddDays(14).ToString("dd/MM/yyyy");
+                // Regra de prazo (+14 dias)
+                var dataBase = DateTime.Now.AddDays(14);
+                // Ajuste fim de semana
+                if (dataBase.DayOfWeek == DayOfWeek.Saturday) dataBase = dataBase.AddDays(2);
+                if (dataBase.DayOfWeek == DayOfWeek.Sunday) dataBase = dataBase.AddDays(1);
+                
+                var novoPrazo = dataBase.ToString("dd/MM/yyyy");
 
                 var sql = @"INSERT INTO verificacoes (id, processo_id, data_hora, responsavel, diligencia_realizada, diligencia_descricao, proximo_prazo_padrao, alteracoes_texto)
                             VALUES (@id, @pid, @dh, @resp, @dr, @dd, @prz, 'Nova Verificação')";
@@ -100,45 +100,46 @@ public ProcessoDetalhesViewModel(string processoId)
                     dh = DateTime.Now.ToString("s"), 
                     resp = usuario,
                     dr = DiligenciaRealizada ? 1 : 0,
-                    dd = DiligenciaDesc,
+                    dd = DiligenciaDesc ?? "",
                     prz = novoPrazo
                 });
 
-                // Atualiza Cache no Processo
+                // Atualiza o processo principal
                 conn.Execute("UPDATE processos SET cache_proximo_prazo = @p, observacao_fixa = @o WHERE id = @id", 
                     new { p = novoPrazo, o = ObsFixa, id = _processoId });
 
-                MessageBox.Show("Salvo com sucesso!");
-                CarregarDados();
+                MessageBox.Show("Verificação salva e prazo atualizado!", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
                 
-                // Limpa campos de diligência após salvar
+                // Limpa campos e recarrega
                 DiligenciaRealizada = false;
                 DiligenciaPendente = false;
                 DiligenciaDesc = "";
                 PendenciaDesc = "";
+                
+                CarregarDados();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro: " + ex.Message);
+                MessageBox.Show("Erro ao salvar: " + ex.Message, "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         [RelayCommand]
         public void Voltar()
         {
-            // Fecha a janela atual
+            // Encontra a janela que está usando este ViewModel e fecha
             var window = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.DataContext == this);
             window?.Close();
         }
 
-        private (string, SolidColorBrush) CalcularStatus(string? dataStr)
+        private (string, SolidColorBrush) CalcularStatus(string dataStr)
         {
              if (DateTime.TryParse(dataStr, out DateTime d))
              {
-                 var dias = (d - DateTime.Now.Date).TotalDays;
+                 var dias = (d.Date - DateTime.Now.Date).TotalDays;
                  if (dias < 0) return ("ATRASADO", Brushes.Red);
                  if (dias == 0) return ("VENCE HOJE", Brushes.OrangeRed);
-                 if (dias <= 7) return ($"Vence em {dias:F0} dias", Brushes.Orange);
+                 if (dias <= 7) return ($"Vence em {dias} dias", Brushes.Goldenrod);
                  return ("No Prazo", Brushes.Green);
              }
              return ("--", Brushes.Gray);
