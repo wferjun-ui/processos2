@@ -3,75 +3,55 @@ using CommunityToolkit.Mvvm.Input;
 using SistemaJuridico.Services;
 using System.Windows;
 using System.Windows.Controls;
-using System.Linq;
 
 namespace SistemaJuridico.ViewModels
 {
     public partial class LoginViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
-
-        // Propriedade que recebe o texto digitado na tela
-        [ObservableProperty] 
-        private string _username = "";
-
-        public LoginViewModel()
-        {
-            // Garante acesso ao banco de dados global
-            _db = App.DB!;
-        }
+        [ObservableProperty] private string _username = "";
+        [ObservableProperty] private Visibility _firstAccessVisibility = Visibility.Collapsed;
+        [ObservableProperty] private Visibility _loginVisibility = Visibility.Visible;
+        
+        // Campos Primeiro Acesso
+        [ObservableProperty] private string _faEmail = "";
+        [ObservableProperty] private string _faUser = "";
+        
+        public LoginViewModel() => _db = App.DB!;
 
         [RelayCommand]
-        public void Login(object? parameter)
+        public void Login(object parameter)
         {
-            // Pega a senha do componente visual de forma segura
-            var passwordBox = parameter as PasswordBox;
-            var password = passwordBox?.Password ?? "";
-
-            // Verificação Detalhada para Debug
-            if (string.IsNullOrWhiteSpace(Username))
-            {
-                MessageBox.Show("O campo 'Usuário' está vazio.", "Atenção", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                MessageBox.Show("O campo 'Senha' está vazio.", "Atenção", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            // Tenta fazer o login no banco
+            var password = (parameter as PasswordBox)?.Password ?? "";
             var result = _db.Login(Username, password);
-
-            if (result.Success)
-            {
-                // Salva quem logou
+            if (result.Success) {
                 Application.Current.Properties["Usuario"] = result.Username;
                 Application.Current.Properties["IsAdmin"] = result.IsAdmin;
-
-                // Abre o Dashboard
-                var main = new MainWindow();
-                Application.Current.MainWindow = main;
-                main.Show();
-
-                // Fecha a tela de Login
-                foreach (Window win in Application.Current.Windows.OfType<Views.LoginWindow>().ToList())
-                {
-                    win.Close();
-                }
-            }
-            else
-            {
-                MessageBox.Show($"Login falhou.\nUsuário digitado: {Username}\nSenha digitada: (oculta)\n\nTente: admin / admin", 
-                    "Credenciais Inválidas", MessageBoxButton.OK, MessageBoxImage.Error);
+                new MainWindow().Show();
+                Application.Current.Windows[0].Close();
+            } else {
+                MessageBox.Show("Login inválido. Se for seu primeiro acesso, clique na opção abaixo.", "Erro");
             }
         }
 
+        [RelayCommand] public void ToggleFirstAccess() {
+            FirstAccessVisibility = Visibility.Visible;
+            LoginVisibility = Visibility.Collapsed;
+        }
+
+        [RelayCommand] public void CancelFirstAccess() {
+            FirstAccessVisibility = Visibility.Collapsed;
+            LoginVisibility = Visibility.Visible;
+        }
+
         [RelayCommand]
-        public void Fechar()
-        {
-            Application.Current.Shutdown();
+        public void RegisterFirstAccess(object parameter) {
+            var pass = (parameter as PasswordBox)?.Password ?? "";
+            string res = _db.CompleteRegistration(FaEmail, FaUser, pass);
+            if (res == "OK") {
+                MessageBox.Show("Cadastro concluído! Faça login.");
+                CancelFirstAccess();
+            } else MessageBox.Show(res);
         }
     }
 }
