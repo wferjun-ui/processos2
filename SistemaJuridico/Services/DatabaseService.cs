@@ -1,10 +1,13 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace SistemaJuridico.Services
 {
@@ -20,7 +23,7 @@ namespace SistemaJuridico.Services
             _dbPath = Path.Combine(dbFolder, "juridico_v5.db");
             _backupFolder = Path.Combine(dbFolder, "Backups");
             _connectionString = $"Data Source={_dbPath}";
-            Initialize();
+            // Não chama Initialize aqui para evitar bloqueio no construtor se usado em DesignTime
         }
 
         public SqliteConnection GetConnection() => new SqliteConnection(_connectionString);
@@ -74,7 +77,6 @@ namespace SistemaJuridico.Services
                     nome TEXT PRIMARY KEY, tipo TEXT);
             ");
 
-            // Garante que o Admin existe se o banco for novo
             SeedAdmin(conn);
         }
 
@@ -90,24 +92,98 @@ namespace SistemaJuridico.Services
             }
         }
 
-        // --- BACKUP AUTOMÁTICO (Igual Python BackupSystem) ---
+        // --- BACKUP AUTOMÁTICO BACKGROUND ---
         public void PerformBackup()
+        {
+            // Executa em thread separada para não travar a UI (Igual Python threading)
+            Task.Run(() => 
+            {
+                try
+                {
+                    if (!Directory.Exists(_backupFolder)) Directory.CreateDirectory(_backupFolder);
+                    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    var backupPath = Path.Combine(_backupFolder, $"backup_auto_{timestamp}.db");
+                    
+                    // Sqlite suporta backup online
+                    using (var source = GetConnection())
+                    using (var dest = new SqliteConnection($"Data Source={backupPath}"))
+                    {
+                        source.Open();
+                        dest.Open();
+                        source.BackupDatabase(dest);
+                    }
+
+                    // Limpeza de backups antigos (Manter 10)
+                    var files = new DirectoryInfo(_backupFolder).GetFiles("*.db")
+                        .OrderByDescending(f => f.CreationTime).Skip(10);
+                    
+                    foreach (var f in files) f.Delete();
+                }
+                catch { /* Log silently */ }
+            });
+        }
+
+        // --- IMPORTAÇÃO JSON (DataImporter do Python) ---
+        public (bool success, string msg) ImportFromJson(string jsonPath)
         {
             try
             {
-                if (!Directory.Exists(_backupFolder)) Directory.CreateDirectory(_backupFolder);
-                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                var backupPath = Path.Combine(_backupFolder, $"backup_auto_{timestamp}.db");
-                
-                File.Copy(_dbPath, backupPath, true);
+                var json = File.ReadAllText(jsonPath);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
 
-                // Mantém apenas os 10 últimos backups
-                var files = new DirectoryInfo(_backupFolder).GetFiles("*.db")
-                    .OrderByDescending(f => f.CreationTime).Skip(10);
+                using var conn = GetConnection();
+                conn.Open();
+                using var trans = conn.BeginTransaction();
+
+                conn.Execute("PRAGMA foreign_keys = OFF", transaction: trans);
+
+                void InsertList(string tableName, string jsonProp)
+                {
+                    if (root.TryGetProperty(jsonProp, out var list))
+                    {
+                        foreach (var item in list.EnumerateArray())
+                        {
+                            var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(item.GetRawText());
+                            if (dict == null) continue;
+
+                            var cols = string.Join(",", dict.Keys);
+                            var vals = string.Join(",", dict.Keys.Select(k => "@" + k));
+                            var query = $"INSERT OR REPLACE INTO {tableName} ({cols}) VALUES ({vals})";
+                            
+                            // Conversão necessária pois System.Text.Json retorna JsonElement
+                            var parameters = new DynamicParameters();
+                            foreach(var kv in dict)
+                            {
+                                var val = kv.Value?.ToString();
+                                // Tratamento especial para booleanos convertidos para int no SQLite
+                                if (kv.Value is JsonElement el && (el.ValueKind == JsonValueKind.True || el.ValueKind == JsonValueKind.False))
+                                    parameters.Add(kv.Key, el.GetBoolean() ? 1 : 0);
+                                else
+                                    parameters.Add(kv.Key, val);
+                            }
+                            
+                            conn.Execute(query, parameters, transaction: trans);
+                        }
+                    }
+                }
+
+                InsertList("usuarios", "usuarios");
+                InsertList("processos", "processos");
+                InsertList("reus", "reus");
+                InsertList("itens_saude", "itens_saude");
+                InsertList("verificacoes", "verificacoes");
+                InsertList("contas", "contas");
+
+                conn.Execute("PRAGMA foreign_keys = ON", transaction: trans);
+                trans.Commit();
                 
-                foreach (var f in files) f.Delete();
+                return (true, "Importação concluída com sucesso!");
             }
-            catch { /* Ignora erro de backup para não travar app */ }
+            catch (Exception ex)
+            {
+                return (false, $"Erro na importação: {ex.Message}");
+            }
         }
 
         // --- SEGURANÇA E LOGIN ---
@@ -122,12 +198,9 @@ namespace SistemaJuridico.Services
         public (bool Success, bool IsAdmin, string Username) Login(string username, string password)
         {
             using var conn = GetConnection();
-            // Permite login por Username ou Email (igual Python)
             var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE lower(username) = lower(@u) OR lower(email) = lower(@u)", new { u = username });
 
             if (user == null) return (false, false, "");
-
-            // Se o usuário existe mas não tem senha (apenas email autorizado), bloqueia login direto
             if (string.IsNullOrEmpty(user.password_hash)) return (false, false, "");
 
             string inputHash = HashPassword(password, user.salt ?? "");
@@ -139,9 +212,7 @@ namespace SistemaJuridico.Services
             return (false, false, "");
         }
 
-        // --- FUNÇÕES DE ADMINISTRAÇÃO DE USUÁRIOS (Igual Python AuthManager) ---
-
-        // 1. Admin autoriza um e-mail (sem senha)
+        // --- AUTH MANAGER ---
         public bool AuthorizeEmail(string email, bool isAdmin)
         {
             using var conn = GetConnection();
@@ -151,21 +222,16 @@ namespace SistemaJuridico.Services
                     new { id = Guid.NewGuid().ToString(), e = email, a = isAdmin ? 1 : 0 });
                 return true;
             }
-            catch 
-            { 
-                return false; // Provavelmente e-mail duplicado 
-            }
+            catch { return false; }
         }
 
-        // 2. Usuário completa o cadastro (Define senha)
         public string CompleteRegistration(string email, string newUsername, string newPassword)
         {
             using var conn = GetConnection();
             var user = conn.QueryFirstOrDefault("SELECT id FROM usuarios WHERE lower(email) = lower(@e)", new { e = email });
             
-            if (user == null) return "E-mail não autorizado pelo administrador.";
+            if (user == null) return "E-mail não autorizado.";
 
-            // Verifica colisão se mudar o username
             if (email.ToLower() != newUsername.ToLower())
             {
                 var exists = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios WHERE lower(username) = lower(@u)", new { u = newUsername });
@@ -179,6 +245,12 @@ namespace SistemaJuridico.Services
                 new { u = newUsername, h = hash, s = salt, e = email });
 
             return "OK";
+        }
+
+        public void DeleteUser(string id)
+        {
+            using var conn = GetConnection();
+            conn.Execute("DELETE FROM usuarios WHERE id=@id", new { id });
         }
     }
 }
