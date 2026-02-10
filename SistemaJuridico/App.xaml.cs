@@ -6,8 +6,8 @@ namespace SistemaJuridico
 {
     public partial class App : Application
     {
-        // Torna o serviço de banco acessível globalmente (Singleton simples)
-        public static DatabaseService DB { get; private set; }
+        // Nullable para evitar aviso de construtor
+        public static DatabaseService? DB { get; private set; }
 
         private void Application_Startup(object sender, StartupEventArgs e)
         {
@@ -15,30 +15,36 @@ namespace SistemaJuridico
             var config = configService.LoadConfig();
             string dbPath = "";
 
-            // Se não tem config, abre a janela de Setup
             if (config == null || string.IsNullOrEmpty(config.DatabasePath))
             {
                 var setup = new SetupWindow();
                 if (setup.ShowDialog() == true)
                 {
-                    // Recarrega após salvar
-                    config = configService.LoadConfig();
+                    // Recarrega configuração recém-criada
+                    var newConfig = configService.LoadConfig();
+                    if (newConfig != null) dbPath = newConfig.DatabasePath;
                 }
                 else
                 {
-                    // Se cancelou o setup, fecha o app
                     Shutdown();
                     return;
                 }
             }
+            else
+            {
+                dbPath = config.DatabasePath;
+            }
 
-            dbPath = config.DatabasePath;
+            // Fallback de segurança se algo falhou no setup
+            if (string.IsNullOrEmpty(dbPath)) 
+            {
+                Shutdown();
+                return;
+            }
 
-            // Inicializa o Banco com o caminho escolhido
             DB = new DatabaseService(dbPath);
-            DB.Initialize(); // Aqui ele recria o admin/admin
+            DB.Initialize();
 
-            // Abre Login
             var login = new LoginWindow();
             login.Show();
         }
