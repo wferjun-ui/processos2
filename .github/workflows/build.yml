@@ -1,21 +1,21 @@
 name: Deploy Manual e Release
 
 on:
-  # Gatilho APENAS manual
+  # Gatilho MANUAL: Você clica no botão para gerar a versão
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Qual o tipo de atualização?'
+        description: 'Tipo de Atualização'
         required: true
         default: 'patch'
         type: choice
         options:
         - patch   # v1.0.0 -> v1.0.1 (Correções)
-        - minor   # v1.0.0 -> v1.1.0 (Novas Funcionalidades)
-        - major   # v1.0.0 -> v2.0.0 (Grandes Mudanças)
+        - minor   # v1.0.0 -> v1.1.0 (Novidades)
+        - major   # v1.0.0 -> v2.0.0 (Mudança Grande)
 
 permissions:
-  contents: write # Necessário para criar a Release
+  contents: write # Permissão para criar a Release e subir o arquivo
 
 jobs:
   build-and-release:
@@ -28,49 +28,53 @@ jobs:
       Installer_Output: Output
 
     steps:
+      # 1. Baixa o seu código
       - name: Checkout do código
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Importante para ler as tags anteriores
+          fetch-depth: 0
 
-      # 1. Calcula a próxima versão baseada na sua escolha manual
+      # 2. Gera o número da versão (ex: v1.0.5) baseado no histórico
       - name: Gerar Versão e Tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Usa a opção que você selecionou no botão (patch, minor ou major)
-          default_bump: ${{ github.event.inputs.version_type }} 
+          default_bump: ${{ github.event.inputs.version_type }}
           release_branches: main
 
+      # 3. Instala o ambiente .NET 8 (Compilador C#)
       - name: Configurar .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
+      # 4. Baixa as dependências (MaterialDesign, SQLite, QuestPDF, etc)
+      # Isso lê o arquivo .csproj e baixa tudo automaticamente
       - name: Restaurar Dependências
         run: dotnet restore ${{ env.Solution_Path }}
 
-      # 2. Compila injetando a versão gerada
-      - name: Compilar (Injetando Versão)
+      # 5. Compila o Executável (Injetando o número da versão)
+      - name: Compilar (Publicar)
         run: |
           dotnet publish ${{ env.Project_Path }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=${{ steps.tag_version.outputs.new_version }} -o ${{ env.DotNet_Output }}
 
+      # 6. Instala a ferramenta de criar instalador
       - name: Instalar Inno Setup
         run: choco install innosetup
 
-      # 3. Gera o instalador
+      # 7. Cria o Instalador (Injetando o mesmo número de versão)
       - name: Compilar Instalador
         run: |
           ISCC /DMyAppVersion="${{ steps.tag_version.outputs.new_version }}" setup.iss
 
-      # 4. Cria a Release e sobe o executável
+      # 8. Cria a Release no GitHub e anexa o arquivo .exe
       - name: Criar GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag_version.outputs.new_tag }}
           name: Versão ${{ steps.tag_version.outputs.new_tag }}
-          body: "Release gerada manualmente. Tipo: ${{ github.event.inputs.version_type }}"
+          body: "Atualização gerada manualmente. Tipo: ${{ github.event.inputs.version_type }}"
           files: ${{ env.Installer_Output }}/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
