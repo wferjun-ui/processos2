@@ -15,18 +15,19 @@ namespace SistemaJuridico.ViewModels
         private readonly DatabaseService _db;
         private readonly string _processoId;
 
-        [ObservableProperty] private ProcessoModel _processo;
-        [ObservableProperty] private string _statusTexto;
-        [ObservableProperty] private SolidColorBrush _statusCorBrush;
+        // Inicializamos com 'new()' para evitar nulos
+        [ObservableProperty] private ProcessoModel _processo = new();
         
-        // Campos de Verificação
-        [ObservableProperty] private string _obsFixa;
+        // Inicializamos textos com string.Empty ("")
+        [ObservableProperty] private string _statusTexto = "";
+        [ObservableProperty] private SolidColorBrush _statusCorBrush = Brushes.Gray;
+        
+        [ObservableProperty] private string _obsFixa = "";
         [ObservableProperty] private bool _diligenciaRealizada;
-        [ObservableProperty] private string _diligenciaDesc;
+        [ObservableProperty] private string _diligenciaDesc = "";
         [ObservableProperty] private bool _diligenciaPendente;
-        [ObservableProperty] private string _pendenciaDesc;
+        [ObservableProperty] private string _pendenciaDesc = "";
         
-        // Listas
         public ObservableCollection<dynamic> Historico { get; set; } = new();
 
         public ProcessoDetalhesViewModel(string processoId)
@@ -40,21 +41,38 @@ namespace SistemaJuridico.ViewModels
         {
             using var conn = _db.GetConnection();
             
-            // Carrega Processo
+            // Tenta buscar o processo
             var pDto = conn.QueryFirstOrDefault<dynamic>("SELECT * FROM processos WHERE id = @id", new { id = _processoId });
-            Processo = new ProcessoModel 
-            { 
-                Id = pDto.id, 
-                Numero = pDto.numero, 
-                Paciente = pDto.paciente, 
-                DataPrazo = pDto.cache_proximo_prazo 
-            };
-            ObsFixa = pDto.observacao_fixa;
 
-            // Calcula Status
-            var (txt, cor) = CalcularStatus(Processo.DataPrazo); // Reutilizar lógica do MainViewModel ou criar helper estático
-            StatusTexto = txt;
-            StatusCorBrush = cor;
+            // Proteção contra nulos (CS8602)
+            if (pDto != null)
+            {
+                // Conversão segura lidando com possíveis nulos do banco
+                string dataPrazo = pDto.cache_proximo_prazo ?? "";
+
+                Processo = new ProcessoModel 
+                { 
+                    Id = pDto.id ?? "", 
+                    Numero = pDto.numero ?? "", 
+                    Paciente = pDto.paciente ?? "", 
+                    DataPrazo = dataPrazo
+                };
+                
+                // Conversão segura para string
+                ObsFixa = (string?)pDto.observacao_fixa ?? "";
+
+                // Calcula Status
+                var (txt, cor) = CalcularStatus(Processo.DataPrazo);
+                StatusTexto = txt;
+                StatusCorBrush = cor;
+            }
+            else
+            {
+                // Se não achar o processo, define padrão para evitar crash
+                Processo = new ProcessoModel { Paciente = "Processo não encontrado" };
+                StatusTexto = "ERRO";
+                StatusCorBrush = Brushes.Red;
+            }
 
             // Carrega Histórico
             Historico.Clear();
@@ -68,9 +86,9 @@ namespace SistemaJuridico.ViewModels
             try
             {
                 using var conn = _db.GetConnection();
-                var usuario = Application.Current.Properties["UsuarioLogado"]?.ToString() ?? "Sistema";
+                var usuario = Application.Current.Properties["Usuario"]?.ToString() ?? "Sistema";
                 
-                // Lógica simplificada de atualização de prazo (+14 dias)
+                // +14 dias
                 var novoPrazo = DateTime.Now.AddDays(14).ToString("dd/MM/yyyy");
 
                 var sql = @"INSERT INTO verificacoes (id, processo_id, data_hora, responsavel, diligencia_realizada, diligencia_descricao, proximo_prazo_padrao, alteracoes_texto)
@@ -92,6 +110,12 @@ namespace SistemaJuridico.ViewModels
 
                 MessageBox.Show("Salvo com sucesso!");
                 CarregarDados();
+                
+                // Limpa campos de diligência após salvar
+                DiligenciaRealizada = false;
+                DiligenciaPendente = false;
+                DiligenciaDesc = "";
+                PendenciaDesc = "";
             }
             catch (Exception ex)
             {
@@ -102,19 +126,22 @@ namespace SistemaJuridico.ViewModels
         [RelayCommand]
         public void Voltar()
         {
-            Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w is Views.ProcessoDetalhesWindow)?.Close();
+            // Fecha a janela atual
+            var window = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.DataContext == this);
+            window?.Close();
         }
 
-        // Helper rápido de status (idealmente ficaria numa classe estática Shared)
         private (string, SolidColorBrush) CalcularStatus(string? dataStr)
         {
              if (DateTime.TryParse(dataStr, out DateTime d))
              {
-                 var dias = (d - DateTime.Now).TotalDays;
+                 var dias = (d - DateTime.Now.Date).TotalDays;
                  if (dias < 0) return ("ATRASADO", Brushes.Red);
+                 if (dias == 0) return ("VENCE HOJE", Brushes.OrangeRed);
+                 if (dias <= 7) return ($"Vence em {dias:F0} dias", Brushes.Orange);
                  return ("No Prazo", Brushes.Green);
              }
-             return ("Indefinido", Brushes.Gray);
+             return ("--", Brushes.Gray);
         }
     }
 }
