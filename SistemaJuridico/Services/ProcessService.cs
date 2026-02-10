@@ -12,20 +12,95 @@ namespace SistemaJuridico.Services
             _db = db;
         }
 
-        public void SaveProcess(ProcessoModel model)
+        // ==============================
+        // BUSCAR PROCESSO
+        // ==============================
+
+        public ProcessoModel? GetById(string id)
         {
             using var conn = _db.GetConnection();
-            conn.Open();
-            using var trans = conn.BeginTransaction();
 
-            var (prazo, _) = ProcessLogic.CalculateDueDates(DateTime.Now.ToString("dd/MM/yyyy"));
+            var p = conn.QueryFirstOrDefault(
+                @"SELECT
+                    id as Id,
+                    numero as Numero,
+                    is_antigo as IsAntigo,
+                    paciente as Paciente,
+                    juiz as Juiz,
+                    genitor_rep_nome as GenitorNome,
+                    genitor_rep_tipo as GenitorTipo,
+                    classificacao as Classificacao,
+                    status_fase as StatusFase,
+                    ultima_atualizacao as UltimaAtualizacao,
+                    cache_proximo_prazo as CacheProximoPrazo,
+                    observacao_fixa as ObservacaoFixa
+                  FROM processos
+                  WHERE id = @id",
+                new { id });
+
+            return p;
+        }
+
+        // ==============================
+        // CRIAR PROCESSO
+        // ==============================
+
+        public string CriarProcesso(ProcessoModel model)
+        {
+            using var conn = _db.GetConnection();
+
+            var id = Guid.NewGuid().ToString();
+
+            var (prazo, _) = ProcessLogic.CalculateDueDates(
+                DateTime.Now.ToString("dd/MM/yyyy"));
 
             conn.Execute(@"
-                INSERT INTO processos 
-                (id, numero, is_antigo, paciente, juiz, genitor_rep_nome, genitor_rep_tipo, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
+                INSERT INTO processos
+                (id, numero, is_antigo, paciente, juiz,
+                 genitor_rep_nome, genitor_rep_tipo,
+                 classificacao, status_fase,
+                 ultima_atualizacao, cache_proximo_prazo)
                 VALUES
-                (@Id,@Numero,@IsAntigo,@Paciente,@Juiz,@GenitorNome,@GenitorTipo,@Classificacao,'Conhecimento',@UA,@Prazo)
-            ", new
+                (@Id,@Numero,@IsAntigo,@Paciente,@Juiz,
+                 @GenitorNome,@GenitorTipo,
+                 @Classificacao,'Conhecimento',
+                 @Ultima,@Prazo)",
+            new
+            {
+                Id = id,
+                model.Numero,
+                IsAntigo = model.IsAntigo ? 1 : 0,
+                model.Paciente,
+                model.Juiz,
+                model.GenitorNome,
+                model.GenitorTipo,
+                model.Classificacao,
+                Ultima = DateTime.Now.ToString("dd/MM/yyyy"),
+                Prazo = prazo
+            });
+
+            return id;
+        }
+
+        // ==============================
+        // ATUALIZAR PROCESSO
+        // ==============================
+
+        public void AtualizarProcesso(ProcessoModel model)
+        {
+            using var conn = _db.GetConnection();
+
+            conn.Execute(@"
+                UPDATE processos SET
+                    numero=@Numero,
+                    is_antigo=@IsAntigo,
+                    paciente=@Paciente,
+                    juiz=@Juiz,
+                    genitor_rep_nome=@GenitorNome,
+                    genitor_rep_tipo=@GenitorTipo,
+                    classificacao=@Classificacao
+                WHERE id=@Id",
+            new
             {
                 model.Id,
                 model.Numero,
@@ -34,41 +109,52 @@ namespace SistemaJuridico.Services
                 model.Juiz,
                 model.GenitorNome,
                 model.GenitorTipo,
-                model.Classificacao,
-                UA = DateTime.Now.ToString("dd/MM/yyyy"),
-                Prazo = prazo
-            }, trans);
+                model.Classificacao
+            });
+        }
 
-            foreach (var r in model.Reus)
+        // ==============================
+        // ATUALIZAR FASE + PRAZO
+        // ==============================
+
+        public void AtualizarFaseEPrazo(
+            string processoId,
+            string fase,
+            string observacao,
+            string dataProxima)
+        {
+            using var conn = _db.GetConnection();
+
+            var (prazo, _) = ProcessLogic.CalculateDueDates(null, dataProxima);
+
+            conn.Execute(@"
+                UPDATE processos SET
+                    status_fase=@fase,
+                    observacao_fixa=@obs,
+                    cache_proximo_prazo=@prazo,
+                    ultima_atualizacao=@ultima
+                WHERE id=@id",
+            new
             {
-                conn.Execute("INSERT INTO reus VALUES (@Id,@Pid,@Nome)", new
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Pid = model.Id,
-                    Nome = r
-                }, trans);
-            }
+                id = processoId,
+                fase,
+                obs = observacao,
+                prazo,
+                ultima = DateTime.Now.ToString("dd/MM/yyyy")
+            });
+        }
 
-            foreach (var i in model.ItensSaude)
-            {
-                conn.Execute(@"
-                    INSERT INTO itens_saude
-                    VALUES (@Id,@Pid,@Tipo,@Nome,@Qtd,@Freq,@Local,@Data,0,0)
-                ", new
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Pid = model.Id,
-                    i.Tipo,
-                    i.Nome,
-                    i.Qtd,
-                    Freq = i.Frequencia,
-                    i.Local,
-                    Data = i.Data
-                }, trans);
-            }
+        // ==============================
+        // EXCLUIR PROCESSO
+        // ==============================
 
-            trans.Commit();
-            _db.PerformBackup();
+        public void ExcluirProcesso(string id)
+        {
+            using var conn = _db.GetConnection();
+
+            conn.Execute(
+                "DELETE FROM processos WHERE id=@id",
+                new { id });
         }
     }
 }
