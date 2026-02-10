@@ -26,8 +26,6 @@ namespace SistemaJuridico.ViewModels
 
         [ObservableProperty] private ObservableCollection<ProcessoModel> _processos = new();
         [ObservableProperty] private string _searchText = "";
-        
-        // Controle de Visibilidade do botão Admin
         [ObservableProperty] private Visibility _adminVisibility = Visibility.Collapsed;
 
         public MainViewModel()
@@ -39,15 +37,10 @@ namespace SistemaJuridico.ViewModels
 
         private void VerificarPermissoes()
         {
-            // Pega a propriedade salva no LoginViewModel
             if (Application.Current.Properties.Contains("IsAdmin") && 
                 (bool)Application.Current.Properties["IsAdmin"] == true)
             {
                 AdminVisibility = Visibility.Visible;
-            }
-            else
-            {
-                AdminVisibility = Visibility.Collapsed;
             }
         }
 
@@ -68,7 +61,6 @@ namespace SistemaJuridico.ViewModels
             CarregarDashboard();
         }
         
-        // NOVO: Comando para abrir o painel admin
         [RelayCommand]
         public void AbrirAdmin()
         {
