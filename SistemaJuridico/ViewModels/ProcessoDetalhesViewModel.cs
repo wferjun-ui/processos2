@@ -1,9 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dapper;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
 using SistemaJuridico.Services;
 using System;
 using System.Collections.ObjectModel;
@@ -14,24 +11,8 @@ using System.Windows.Media;
 
 namespace SistemaJuridico.ViewModels
 {
-    // Modelo Interno Completo
-    public class ProcessoCompletoDto
-    {
-        public string Id { get; set; } = "";
-        public string Numero { get; set; } = "";
-        public string Paciente { get; set; } = "";
-        public string Juiz { get; set; } = "";
-        public string GenitorRepNome { get; set; } = "";
-        public string GenitorRepTipo { get; set; } = "";
-        public string Classificacao { get; set; } = "";
-        public string StatusFase { get; set; } = "";
-        public string UltimaAtualizacao { get; set; } = "";
-        public string ObservacaoFixa { get; set; } = "";
-        public string CacheProximoPrazo { get; set; } = "";
-    }
-
-    public partial class ItemSaudeCheckModel : ObservableObject
-    {
+    // Modelo para Itens de Saúde (igual ao Python)
+    public partial class ItemSaudeDto : ObservableObject {
         public string Id { get; set; } = "";
         public string Tipo { get; set; } = "";
         public string Nome { get; set; } = "";
@@ -39,229 +20,174 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _local = "";
         [ObservableProperty] private string _dataPrescricao = "";
         [ObservableProperty] private bool _isDesnecessario;
-        [ObservableProperty] private bool _temBloqueio;
-    }
-
-    public class ContaModel
-    {
-        public string Id { get; set; } = "";
-        public string Data { get; set; } = "";
-        public string Historico { get; set; } = "";
-        public decimal ValorAlvara { get; set; }
-        public decimal ValorConta { get; set; } 
-        public string Tipo { get; set; } = "";
-        public string Status { get; set; } = ""; 
-        public bool IsRascunho => Status == "rascunho";
-        public SolidColorBrush CorTexto => IsRascunho ? Brushes.Orange : Brushes.Black;
+        [ObservableProperty] private bool _temBloqueio; // Python [cite: 329]
+        [ObservableProperty] private string _frequencia = "";
     }
 
     public partial class ProcessoDetalhesViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
         private readonly string _processoId;
+        private string _userLogado;
 
-        // --- DADOS DA TELA ---
-        [ObservableProperty] private ProcessoCompletoDto _processo = new(); // Objeto principal
+        // Dados Principais
+        [ObservableProperty] private string _numero = "";
+        [ObservableProperty] private string _paciente = "";
+        [ObservableProperty] private string _juiz = "";
         [ObservableProperty] private string _statusTexto = "";
-        [ObservableProperty] private SolidColorBrush _statusCorBrush = Brushes.Gray;
+        [ObservableProperty] private SolidColorBrush _statusCor = Brushes.Gray;
         [ObservableProperty] private string _saldoDisplay = "R$ 0,00";
         [ObservableProperty] private SolidColorBrush _saldoCor = Brushes.Black;
 
-        // --- ABA VERIFICAÇÃO ---
+        // Aba Verificação
         [ObservableProperty] private string _obsFixa = "";
         [ObservableProperty] private string _faseProcessual = "";
         [ObservableProperty] private bool _diligenciaRealizada;
         [ObservableProperty] private string _diligenciaDesc = "";
         [ObservableProperty] private bool _diligenciaPendente;
         [ObservableProperty] private string _pendenciaDesc = "";
-        
-        [ObservableProperty] private string _proxData = "";
         [ObservableProperty] private string _responsavel = "";
+        [ObservableProperty] private string _proxData = "";
+        
+        public ObservableCollection<ItemSaudeDto> ItensSaude { get; set; } = new();
+        public ObservableCollection<string> Fases { get; } = new() { "Conhecimento", "Cumprimento de Sentença", "Recurso", "Arquivado", "Suspenso" };
 
-        public ObservableCollection<ItemSaudeCheckModel> ItensVerificacao { get; set; } = new();
-        [ObservableProperty] private Visibility _temSaudeVisibility = Visibility.Collapsed;
-
-        // --- ABA HISTÓRICO ---
-        public ObservableCollection<dynamic> HistoricoGeral { get; set; } = new();
-
-        // --- ABA FINANCEIRO ---
+        // Aba Financeiro
+        [ObservableProperty] private string _finTipo = "Alvará";
         [ObservableProperty] private string _finData = DateTime.Now.ToString("dd/MM/yyyy");
-        [ObservableProperty] private string _finTipo = "Alvará"; 
-        [ObservableProperty] private string _finNF = "";
+        [ObservableProperty] private string _finNf = "";
         [ObservableProperty] private string _finMov = "";
         [ObservableProperty] private string _finValor = "";
+        [ObservableProperty] private bool _isAnexo = false;
         
-        [ObservableProperty] private string _finItemNome = "";
+        [cite_start]// Campos extras Financeiro (Box Extra do Python [cite: 345])
+        [ObservableProperty] private Visibility _extrasVisivel = Visibility.Collapsed;
+        [ObservableProperty] private string _finItem = "";
         [ObservableProperty] private string _finQtd = "";
         [ObservableProperty] private string _finMes = "";
         [ObservableProperty] private string _finAno = "";
         [ObservableProperty] private string _finObs = "";
-        [ObservableProperty] private Visibility _boxExtraVisibility = Visibility.Collapsed;
 
-        public ObservableCollection<ContaModel> ListaRascunhos { get; set; } = new();
-        public ObservableCollection<ContaModel> ListaHistoricoFin { get; set; } = new();
+        public ObservableCollection<dynamic> Rascunhos { get; set; } = new();
+        public ObservableCollection<dynamic> HistoricoFin { get; set; } = new();
+        public ObservableCollection<dynamic> HistoricoLogs { get; set; } = new();
 
-        public ObservableCollection<string> FasesPossiveis { get; } = new() 
-        { "Conhecimento", "Cumprimento de Sentença", "Recurso", "Arquivado", "Suspenso", "Aguardando Trânsito", "Cumprimento Provisório" };
-
-        public ProcessoDetalhesViewModel(string processoId)
+        public ProcessoDetalhesViewModel(string id)
         {
             _db = App.DB!;
-            _processoId = processoId;
-            QuestPDF.Settings.License = LicenseType.Community;
+            _processoId = id;
+            _userLogado = Application.Current.Properties["Usuario"]?.ToString() ?? "Admin";
+            Responsavel = _userLogado;
+
+            var (dt, _) = ProcessLogic.CalculateDueDates(DateTime.Now.ToString("dd/MM/yyyy"));
+            ProxData = dt;
+
+            CarregarTudo();
+        }
+
+        partial void OnFinTipoChanged(string value) => ExtrasVisivel = value == "Alvará" ? Visibility.Collapsed : Visibility.Visible;
+
+        private void CarregarTudo()
+        {
+            using var conn = _db.GetConnection();
             
-            Responsavel = Application.Current.Properties["Usuario"]?.ToString() ?? "Admin";
-            var (d, _) = ProcessLogic.CalculateDueDates(DateTime.Now.ToString("dd/MM/yyyy"));
-            ProxData = d;
-
-            CarregarDadosCompletos();
-        }
-
-        partial void OnFinTipoChanged(string value)
-        {
-            BoxExtraVisibility = value == "Alvará" ? Visibility.Collapsed : Visibility.Visible;
-        }
-
-        private void CarregarDadosCompletos()
-        {
-            try
+            // 1. Dados do Processo
+            var p = conn.QueryFirstOrDefault("SELECT * FROM processos WHERE id = @id", new { id = _processoId });
+            if (p != null)
             {
-                using var conn = _db.GetConnection();
-                conn.Open();
-
-                // 1. CARREGAR PROCESSO (Com Aliases para o C# entender)
-                string sqlProc = @"
-                    SELECT 
-                        id, numero, paciente, juiz, 
-                        genitor_rep_nome AS GenitorRepNome, 
-                        genitor_rep_tipo AS GenitorRepTipo,
-                        classificacao, 
-                        status_fase AS StatusFase, 
-                        ultima_atualizacao AS UltimaAtualizacao,
-                        observacao_fixa AS ObservacaoFixa, 
-                        cache_proximo_prazo AS CacheProximoPrazo
-                    FROM processos 
-                    WHERE id = @id";
-
-                var p = conn.QueryFirstOrDefault<ProcessoCompletoDto>(sqlProc, new { id = _processoId });
-                
-                if (p != null)
-                {
-                    Processo = p;
-                    ObsFixa = p.ObservacaoFixa ?? "";
-                    FaseProcessual = p.StatusFase ?? "Conhecimento";
-                    
-                    var (txt, cor) = ProcessLogic.CheckPrazoStatus(p.CacheProximoPrazo);
-                    StatusTexto = txt; 
-                    StatusCorBrush = cor;
-
-                    TemSaudeVisibility = Processo.Classificacao == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
-                }
-
-                // 2. ITENS DE SAÚDE
-                ItensVerificacao.Clear();
-                string sqlItens = @"
-                    SELECT id, tipo, nome, qtd, local, 
-                           data_prescricao AS DataPrescricao, 
-                           is_desnecessario AS IsDesnecessario, 
-                           tem_bloqueio AS TemBloqueio 
-                    FROM itens_saude 
-                    WHERE processo_id = @id";
-                
-                var itens = conn.Query<ItemSaudeCheckModel>(sqlItens, new { id = _processoId });
-                foreach (var i in itens) ItensVerificacao.Add(i);
-
-                // 3. HISTÓRICO
-                HistoricoGeral.Clear();
-                var hists = conn.Query("SELECT * FROM verificacoes WHERE processo_id = @id ORDER BY data_hora DESC", new { id = _processoId });
-                foreach (var h in hists) HistoricoGeral.Add(h);
-
-                // 4. FINANCEIRO
-                CarregarFinanceiro(conn);
+                Numero = p.numero; Paciente = p.paciente; Juiz = p.juiz;
+                ObsFixa = p.observacao_fixa ?? "";
+                FaseProcessual = p.status_fase ?? "Conhecimento";
+                var (txt, cor) = ProcessLogic.CheckPrazoStatus(p.cache_proximo_prazo);
+                StatusTexto = txt; StatusCor = cor;
             }
-            catch (Exception ex) { MessageBox.Show("Erro ao carregar: " + ex.Message); }
-        }
 
-        private void CarregarFinanceiro(System.Data.IDbConnection conn)
-        {
-            ListaRascunhos.Clear();
-            ListaHistoricoFin.Clear();
-            
-            var lancamentos = conn.Query<dynamic>("SELECT * FROM contas WHERE processo_id = @id ORDER BY data_movimentacao", new { id = _processoId });
+            // 2. Itens de Saúde
+            ItensSaude.Clear();
+            var itens = conn.Query<ItemSaudeDto>("SELECT id, tipo, nome, qtd, frequencia, local, data_prescricao as DataPrescricao, is_desnecessario as IsDesnecessario, tem_bloqueio as TemBloqueio FROM itens_saude WHERE processo_id=@id", new { id = _processoId });
+            foreach (var i in itens) ItensSaude.Add(i);
+
+            [cite_start]// 3. Financeiro (Lógica Python: Separar Rascunho de Lançado [cite: 388])
+            Rascunhos.Clear(); HistoricoFin.Clear();
+            var contas = conn.Query("SELECT * FROM contas WHERE processo_id=@id ORDER BY data_movimentacao", new { id = _processoId });
             decimal saldo = 0;
 
-            foreach (var l in lancamentos)
+            foreach (var c in contas)
             {
-                decimal cred = (decimal)(l.valor_alvara ?? 0.0);
-                decimal deb = (decimal)(l.valor_conta ?? 0.0);
-                string status = l.status_conta;
-
-                var conta = new ContaModel {
-                    Id = l.id, Data = l.data_movimentacao, Historico = l.historico,
-                    ValorAlvara = cred, ValorConta = deb, Tipo = l.tipo_lancamento, Status = status
-                };
-
-                if (status == "rascunho")
+                decimal valAlv = (decimal)(c.valor_alvara ?? 0.0);
+                decimal valCon = (decimal)(c.valor_conta ?? 0.0);
+                
+                if (c.status_conta == "rascunho")
                 {
-                    ListaRascunhos.Add(conta);
+                    Rascunhos.Add(new { Id=c.id, Data=c.data_movimentacao, Hist=c.historico, Valor=(valAlv > 0 ? valAlv : valCon).ToString("C2") });
                 }
                 else
                 {
-                    saldo += (cred - deb);
-                    ListaHistoricoFin.Add(conta);
+                    saldo += (valAlv - valCon);
+                    HistoricoFin.Add(new { 
+                        Id=c.id, Data=c.data_movimentacao, Hist=c.historico, 
+                        Cred=valAlv > 0 ? valAlv.ToString("C2") : "", 
+                        Deb=valCon > 0 ? valCon.ToString("C2") : "",
+                        Saldo=saldo.ToString("C2"),
+                        Cor=valAlv > 0 ? Brushes.Green : Brushes.Red
+                    });
                 }
             }
-
             SaldoDisplay = saldo.ToString("C2");
             SaldoCor = saldo >= 0 ? Brushes.Green : Brushes.Red;
+            
+            // 4. Logs
+            HistoricoLogs.Clear();
+            var logs = conn.Query("SELECT * FROM verificacoes WHERE processo_id=@id ORDER BY data_hora DESC", new { id = _processoId });
+            foreach(var l in logs) HistoricoLogs.Add(l);
         }
 
         [RelayCommand]
         public void SalvarVerificacao()
         {
+            if (DiligenciaPendente && string.IsNullOrWhiteSpace(PendenciaDesc)) {
+                MessageBox.Show("Descreva a pendência obrigatória."); return;
+            }
+
             try
             {
                 using var conn = _db.GetConnection();
                 conn.Open();
                 using var trans = conn.BeginTransaction();
 
-                // 1. Atualizar Processo
-                conn.Execute("UPDATE processos SET status_fase=@f, observacao_fixa=@o, cache_proximo_prazo=@p, ultima_atualizacao=@u WHERE id=@id",
-                    new { f = FaseProcessual, o = ObsFixa, p = ProxData, u = DateTime.Now.ToString("dd/MM/yyyy"), id = _processoId }, trans);
-
-                // 2. Atualizar Itens de Saúde
-                foreach(var item in ItensVerificacao)
-                {
-                    conn.Execute("UPDATE itens_saude SET qtd=@q, local=@l, data_prescricao=@d, is_desnecessario=@isd, tem_bloqueio=@tb WHERE id=@id",
-                        new { q = item.Qtd, l = item.Local, d = item.DataPrescricao, isd = item.IsDesnecessario ? 1 : 0, tb = item.TemBloqueio ? 1 : 0, id = item.Id }, trans);
+                [cite_start]// Salva Itens de Saúde Atualizados 
+                foreach (var item in ItensSaude) {
+                    conn.Execute(@"UPDATE itens_saude SET qtd=@Qtd, local=@Local, data_prescricao=@DataPrescricao, 
+                                   is_desnecessario=@IsDesnecessario, tem_bloqueio=@TemBloqueio WHERE id=@Id", 
+                                   item, trans);
                 }
 
-                // 3. Gerar Log
-                string snapshot = JsonSerializer.Serialize(ItensVerificacao);
-                string resumo = DiligenciaRealizada ? $"[Dil] {DiligenciaDesc}" : "Verificação de Rotina";
-                if(DiligenciaPendente) resumo += $" | [Pend] {PendenciaDesc}";
-                
-                var (_, notif) = ProcessLogic.CalculateDueDates(ProxData);
+                // Calcula prazos
+                var (prz, notif) = ProcessLogic.CalculateDueDates(ProxData); // Usa a data digitada ou hoje
 
-                conn.Execute(@"
-                    INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, 
-                    diligencia_realizada, diligencia_descricao, diligencia_pendente, pendencias_descricao,
-                    proximo_prazo_padrao, data_notificacao, alteracoes_texto, itens_snapshot_json)
-                    VALUES (@id, @pid, @dh, @st, @resp, @dr, @dd, @dp, @pd, @prz, @notif, @alt, @snap)",
-                    new { 
-                        id = Guid.NewGuid().ToString(), pid = _processoId, dh = DateTime.Now.ToString("s"),
-                        st = FaseProcessual, resp = Responsavel, 
-                        dr = DiligenciaRealizada ? 1 : 0, dd = DiligenciaDesc ?? "",
-                        dp = DiligenciaPendente ? 1 : 0, pd = PendenciaDesc ?? "",
-                        prz = ProxData, notif = notif, alt = resumo, snap = snapshot
-                    }, trans);
+                // Atualiza Processo (Cache)
+                conn.Execute("UPDATE processos SET status_fase=@f, observacao_fixa=@o, cache_proximo_prazo=@p, ultima_atualizacao=@u WHERE id=@id",
+                    new { f = FaseProcessual, o = ObsFixa, p = prz, u = DateTime.Now.ToString("dd/MM/yyyy"), id = _processoId }, trans);
+
+                // Cria Log
+                string resumo = DiligenciaRealizada ? $"[Dil] {DiligenciaDesc}" : "Verificação";
+                string jsonSnap = JsonSerializer.Serialize(ItensSaude);
+                
+                conn.Execute(@"INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, 
+                             diligencia_realizada, diligencia_descricao, diligencia_pendente, pendencias_descricao,
+                             proximo_prazo_padrao, data_notificacao, alteracoes_texto, itens_snapshot_json)
+                             VALUES (@id, @pid, @dh, @st, @resp, @dr, @dd, @dp, @pd, @pp, @dn, @at, @js)",
+                             new {
+                                 id = Guid.NewGuid().ToString(), pid = _processoId, dh = DateTime.Now.ToString("s"),
+                                 st = FaseProcessual, resp = Responsavel,
+                                 dr = DiligenciaRealizada?1:0, dd = DiligenciaDesc, dp = DiligenciaPendente?1:0, pd = PendenciaDesc,
+                                 pp = prz, dn = notif, at = resumo, js = jsonSnap
+                             }, trans);
 
                 trans.Commit();
                 _db.PerformBackup();
-                
                 MessageBox.Show("Verificação Salva!");
-                DiligenciaRealizada = false; DiligenciaPendente = false; DiligenciaDesc = ""; PendenciaDesc = "";
-                CarregarDadosCompletos();
+                CarregarTudo();
             }
             catch (Exception ex) { MessageBox.Show("Erro: " + ex.Message); }
         }
@@ -269,80 +195,45 @@ namespace SistemaJuridico.ViewModels
         [RelayCommand]
         public void AdicionarRascunho()
         {
-            if (string.IsNullOrWhiteSpace(FinValor)) { MessageBox.Show("Informe o Valor."); return; }
-            
             decimal val = ProcessLogic.ParseMoney(FinValor);
-            decimal valAlvara = FinTipo == "Alvará" ? val : 0;
-            decimal valConta = FinTipo != "Alvará" ? val : 0;
+            if (val <= 0) return;
 
-            string historico = FinTipo == "Alvará" 
-                ? $"Alvará - {FinNF} - {FinMov}" 
-                : $"{FinTipo}: {FinItemNome} (Ref: {FinMes}/{FinAno}) - {FinObs}";
+            string hist = FinTipo == "Alvará" ? $"Alvará - {FinNf}" : $"{FinTipo}: {FinItem} ({FinQtd}) Ref: {FinMes}/{FinAno} - {FinObs}";
+            string mov = IsAnexo ? "Anexo" : FinMov;
+            
+            decimal vAlv = FinTipo == "Alvará" ? val : 0;
+            decimal vCon = FinTipo != "Alvará" ? val : 0;
 
             using var conn = _db.GetConnection();
-            conn.Execute(@"
-                INSERT INTO contas (id, processo_id, data_movimentacao, tipo_lancamento, historico, num_nf_alvara, mov_processo, 
-                valor_alvara, valor_conta, status_conta, responsavel)
-                VALUES (@id, @pid, @dt, @tp, @hist, @nf, @mov, @va, @vc, 'rascunho', @resp)",
-                new { 
-                    id = Guid.NewGuid().ToString(), pid = _processoId, dt = FinData, tp = FinTipo, hist = historico,
-                    nf = FinNF, mov = FinMov, va = valAlvara, vc = valConta, resp = Responsavel 
-                });
-
-            FinValor = ""; FinObs = ""; FinItemNome = "";
-            CarregarDadosCompletos();
+            conn.Execute(@"INSERT INTO contas (id, processo_id, data_movimentacao, tipo_lancamento, historico, 
+                           num_nf_alvara, valor_alvara, valor_conta, mov_processo, status_conta, responsavel)
+                           VALUES (@id, @pid, @dt, @tp, @hist, @nf, @va, @vc, @mov, 'rascunho', @resp)",
+                           new {
+                               id = Guid.NewGuid().ToString(), pid = _processoId, dt = FinData, tp = FinTipo, hist,
+                               nf = FinNf, va = vAlv, vc = vCon, mov, resp = _userLogado
+                           });
+            
+            FinValor = ""; FinItem = ""; FinObs = "";
+            CarregarTudo();
         }
 
         [RelayCommand]
         public void LancarTudo()
         {
-            if (MessageBox.Show("Confirmar o lançamento definitivo de todos os rascunhos?", "Financeiro", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            if (MessageBox.Show("Confirmar lançamento definitivo?", "Financeiro", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
             {
                 using var conn = _db.GetConnection();
-                conn.Execute("UPDATE contas SET status_conta='lancado' WHERE processo_id=@pid AND status_conta='rascunho'", new { pid = _processoId });
-                CarregarDadosCompletos();
+                conn.Execute("UPDATE contas SET status_conta='lancado' WHERE processo_id=@id AND status_conta='rascunho'", new { id = _processoId });
+                _db.PerformBackup();
+                CarregarTudo();
             }
         }
-
-        [RelayCommand]
-        public void ExcluirConta(string id)
-        {
-            if (MessageBox.Show("Excluir lançamento?", "Confirma", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
-            {
-                using var conn = _db.GetConnection();
-                conn.Execute("DELETE FROM contas WHERE id=@id", new { id });
-                CarregarDadosCompletos();
-            }
-        }
-
-        [RelayCommand]
-        public void Voltar() => Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.DataContext == this)?.Close();
         
         [RelayCommand]
-        public void GerarPDF() 
-        {
-            try
-            {
-                var arquivo = $"Relatorio_{Processo.Numero}_{DateTime.Now:yyyyMMdd}.pdf";
-                var path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), arquivo);
-                Document.Create(container => {
-                    container.Page(page => {
-                        page.Margin(50);
-                        page.Header().Text($"Relatório Processo {Processo.Numero}").FontSize(20).SemiBold().FontColor(QuestPDF.Helpers.Colors.Blue.Medium);
-                        page.Content().PaddingVertical(10).Table(table => {
-                            table.ColumnsDefinition(columns => { columns.ConstantColumn(80); columns.RelativeColumn(); columns.ConstantColumn(80); columns.ConstantColumn(80); });
-                            table.Header(header => { header.Cell().Text("Data").Bold(); header.Cell().Text("Histórico").Bold(); header.Cell().AlignRight().Text("Crédito").Bold(); header.Cell().AlignRight().Text("Débito").Bold(); });
-                            foreach (var item in ListaHistoricoFin) {
-                                table.Cell().Text(item.Data); table.Cell().Text(item.Historico);
-                                table.Cell().AlignRight().Text(item.ValorAlvara > 0 ? $"{item.ValorAlvara:N2}" : "-").FontColor(QuestPDF.Helpers.Colors.Green.Medium);
-                                table.Cell().AlignRight().Text(item.ValorConta > 0 ? $"{item.ValorConta:N2}" : "-").FontColor(QuestPDF.Helpers.Colors.Red.Medium);
-                            }
-                        });
-                    });
-                }).GeneratePdf(path);
-                MessageBox.Show($"PDF gerado:\n{path}");
-            }
-            catch (Exception ex) { MessageBox.Show("Erro: " + ex.Message); }
+        public void ExcluirConta(string id) {
+            using var conn = _db.GetConnection();
+            conn.Execute("DELETE FROM contas WHERE id=@id", new { id });
+            CarregarTudo();
         }
     }
 }
