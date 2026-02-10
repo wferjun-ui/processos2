@@ -12,26 +12,25 @@ using System.Windows.Media;
 
 namespace SistemaJuridico.ViewModels
 {
-    // DTO para Grid de Contas (Unifica Rascunho e Histórico)
     public class ContaGridDto 
     {
-        public string Id { get; set; }
-        public string Data { get; set; }
-        public string Hist { get; set; }
-        public string Valor { get; set; }
-        public string Cred { get; set; }
-        public string Deb { get; set; }
-        public string Saldo { get; set; }
-        public SolidColorBrush Cor { get; set; }
+        public string Id { get; set; } = string.Empty;
+        public string Data { get; set; } = string.Empty;
+        public string Hist { get; set; } = string.Empty;
+        public string Valor { get; set; } = string.Empty;
+        public string Cred { get; set; } = string.Empty;
+        public string Deb { get; set; } = string.Empty;
+        public string Saldo { get; set; } = string.Empty;
+        public SolidColorBrush Cor { get; set; } = Brushes.Black;
         public bool IsRascunho { get; set; }
-        public dynamic Raw { get; set; } // Guarda dados originais para edição
+        public dynamic Raw { get; set; } = default!; 
     }
 
     public partial class ItemSaudeDto : ObservableObject 
     {
-        public string Id { get; set; } = "";
-        public string Tipo { get; set; } = "";
-        public string Nome { get; set; } = "";
+        public string Id { get; set; } = string.Empty;
+        public string Tipo { get; set; } = string.Empty;
+        public string Nome { get; set; } = string.Empty;
         [ObservableProperty] private string _qtd = "";
         [ObservableProperty] private string _local = "";
         [ObservableProperty] private string _dataPrescricao = "";
@@ -45,9 +44,7 @@ namespace SistemaJuridico.ViewModels
         private readonly DatabaseService _db;
         private readonly string _processoId;
         private string _userLogado;
-        private ObservableCollection<ItemSaudeDto> _itensSaudeOriginalState = new(); // Para comparar mudanças
 
-        // --- CABEÇALHO ---
         [ObservableProperty] private string _numero = "";
         [ObservableProperty] private string _paciente = "";
         [ObservableProperty] private string _juiz = "";
@@ -57,7 +54,6 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _saldoDisplay = "R$ 0,00";
         [ObservableProperty] private SolidColorBrush _saldoCor = Brushes.Black;
 
-        // --- VERIFICAÇÃO ---
         [ObservableProperty] private string _obsFixa = "";
         [ObservableProperty] private string _faseProcessual = "";
         [ObservableProperty] private bool _diligenciaRealizada;
@@ -75,7 +71,6 @@ namespace SistemaJuridico.ViewModels
             "Cumprimento provisório", "Agravo de instrumento" 
         };
 
-        // --- FINANCEIRO ---
         [ObservableProperty] private string _finTipo = "Alvará";
         [ObservableProperty] private string _finData = DateTime.Now.ToString("dd/MM/yyyy");
         [ObservableProperty] private string _finNf = "";
@@ -83,7 +78,6 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _finValor = "";
         [ObservableProperty] private bool _isAnexo = false;
         
-        // Box Extra (Campos do Python)
         [ObservableProperty] private Visibility _extrasVisivel = Visibility.Collapsed;
         [ObservableProperty] private ObservableCollection<string> _listaItensCombo = new();
         [ObservableProperty] private string _finItemCombo = "";
@@ -95,7 +89,6 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _finAno = "";
         [ObservableProperty] private string _finObs = "";
 
-        // Controle de Edição Financeira
         [ObservableProperty] private string _btnSalvarContaTexto = "ADICIONAR AO RASCUNHO";
         [ObservableProperty] private SolidColorBrush _btnSalvarContaCor = Brushes.Blue; 
         [ObservableProperty] private Visibility _btnCancelarEditVisibility = Visibility.Collapsed;
@@ -112,7 +105,6 @@ namespace SistemaJuridico.ViewModels
             _userLogado = Application.Current.Properties["Usuario"]?.ToString() ?? "Admin";
             Responsavel = _userLogado;
 
-            // Default dates
             var (dt, _) = ProcessLogic.CalculateDueDates(DateTime.Now.ToString("dd/MM/yyyy"));
             ProxData = dt;
 
@@ -130,14 +122,12 @@ namespace SistemaJuridico.ViewModels
         {
             using var conn = _db.GetConnection();
             
-            // 1. Processo
             var p = conn.QueryFirstOrDefault("SELECT * FROM processos WHERE id = @id", new { id = _processoId });
             if (p != null) {
                 Numero = p.numero; Paciente = p.paciente; Juiz = p.juiz; Classificacao = p.classificacao;
                 ObsFixa = p.observacao_fixa ?? ""; FaseProcessual = p.status_fase ?? "Conhecimento";
                 
-                // Prioriza Cache se existir, senão pega última verificação
-                string prazoShow = p.cache_proximo_prazo;
+                string? prazoShow = p.cache_proximo_prazo;
                 if (string.IsNullOrEmpty(prazoShow)) {
                     var last = conn.QueryFirstOrDefault("SELECT proximo_prazo_padrao FROM verificacoes WHERE processo_id=@id ORDER BY data_hora DESC", new { id=_processoId });
                     prazoShow = last?.proximo_prazo_padrao;
@@ -148,18 +138,16 @@ namespace SistemaJuridico.ViewModels
                 SaudeVisibility = Classificacao == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            // 2. Itens Saúde & Snapshot
-            ItensSaude.Clear(); ListaItensCombo.Clear(); _itensSaudeOriginalState.Clear();
+            ItensSaude.Clear(); ListaItensCombo.Clear();
             var itens = conn.Query<ItemSaudeDto>("SELECT * FROM itens_saude WHERE processo_id=@id", new { id = _processoId });
             foreach (var i in itens) { 
-                ItensSaude.Add(i); 
-                // Clona estado original para log de alterações
-                _itensSaudeOriginalState.Add(JsonSerializer.Deserialize<ItemSaudeDto>(JsonSerializer.Serialize(i)));
-                ListaItensCombo.Add(i.Nome); 
+                if (i != null) {
+                    ItensSaude.Add(i); 
+                    ListaItensCombo.Add(i.Nome); 
+                }
             }
             ListaItensCombo.Add("Outro...");
 
-            // 3. Financeiro (Lógica Python separada: Rascunho vs Confirmado)
             Rascunhos.Clear(); HistoricoFin.Clear();
             var contas = conn.Query("SELECT * FROM contas WHERE processo_id=@id ORDER BY data_movimentacao", new { id = _processoId });
             decimal saldo = 0;
@@ -172,7 +160,7 @@ namespace SistemaJuridico.ViewModels
                 var dto = new ContaGridDto {
                     Id = c.id, Data = c.data_movimentacao, Hist = c.historico,
                     Valor = ProcessLogic.FormatMoney(valDisplay),
-                    Raw = c // Guarda objeto original para edição
+                    Raw = c 
                 };
 
                 if (c.status_conta == "rascunho") {
@@ -191,7 +179,6 @@ namespace SistemaJuridico.ViewModels
             SaldoDisplay = ProcessLogic.FormatMoney(saldo);
             SaldoCor = saldo >= 0 ? Brushes.Green : Brushes.Red;
 
-            // 4. Logs
             HistoricoLogs.Clear();
             var logs = conn.Query("SELECT * FROM verificacoes WHERE processo_id=@id ORDER BY data_hora DESC LIMIT 100", new { id = _processoId });
             foreach(var l in logs) {
@@ -213,24 +200,19 @@ namespace SistemaJuridico.ViewModels
             try {
                 using var conn = _db.GetConnection(); conn.Open(); using var trans = conn.BeginTransaction();
                 
-                // Atualiza Itens de Saúde
                 foreach (var item in ItensSaude)
                     conn.Execute("UPDATE itens_saude SET qtd=@Qtd, local=@Local, data_prescricao=@DataPrescricao, is_desnecessario=@IsDesnecessario, tem_bloqueio=@TemBloqueio WHERE id=@Id", item, trans);
 
-                // Cálculo de datas com lógica manual ou automática
                 var (prz, notif) = ProcessLogic.CalculateDueDates(null, ProxData);
                 if (string.IsNullOrEmpty(prz)) { 
-                    // Fallback se data manual for inválida ou vazia, usa Hoje
                     (prz, notif) = ProcessLogic.CalculateDueDates(DateTime.Now.ToString("dd/MM/yyyy"));
                 }
 
-                // Gera resumo de alterações (Logica Python check_changes)
                 string resumo = DiligenciaRealizada ? $"[Dil] {DiligenciaDesc}" : "Verificação de Rotina";
                 
                 conn.Execute("UPDATE processos SET status_fase=@f, observacao_fixa=@o, cache_proximo_prazo=@p, ultima_atualizacao=@u WHERE id=@id",
                     new { f = FaseProcessual, o = ObsFixa, p = prz, u = DateTime.Now.ToString("dd/MM/yyyy"), id = _processoId }, trans);
 
-                // SNAPSHOT JSON IMPORTANTE
                 string jsonSnapshot = JsonSerializer.Serialize(ItensSaude);
 
                 conn.Execute(@"INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, diligencia_realizada, diligencia_descricao, diligencia_pendente, pendencias_descricao, proximo_prazo_padrao, data_notificacao, alteracoes_texto, itens_snapshot_json)
@@ -253,7 +235,6 @@ namespace SistemaJuridico.ViewModels
             string nomeItem = (FinItemCombo == "Outro..." || string.IsNullOrEmpty(FinItemCombo)) ? FinItemTexto : FinItemCombo;
             if (string.IsNullOrEmpty(nomeItem)) nomeItem = "Despesa Diversa";
 
-            // Monta histórico igual Python
             string hist = FinTipo == "Alvará" ? $"Alvará - {FinNf}" : $"{FinTipo}: {nomeItem}";
             if (!string.IsNullOrEmpty(FinQtd)) hist += $" ({FinQtd})";
             if (!string.IsNullOrEmpty(FinMes) || !string.IsNullOrEmpty(FinAno)) hist += $" Ref: {FinMes}/{FinAno}";
@@ -267,7 +248,6 @@ namespace SistemaJuridico.ViewModels
 
             if (_editingContaId != null)
             {
-                // MODO EDIÇÃO
                 conn.Execute(@"UPDATE contas SET data_movimentacao=@dt, tipo_lancamento=@tp, historico=@hist, num_nf_alvara=@nf, 
                                valor_alvara=@va, valor_conta=@vc, mov_processo=@mov, terapia_medicamento_nome=@nm, quantidade=@qt, 
                                mes_referencia=@mr, ano_referencia=@ar, observacoes=@ob WHERE id=@id",
@@ -277,12 +257,10 @@ namespace SistemaJuridico.ViewModels
             }
             else
             {
-                // MODO INSERÇÃO
                 conn.Execute(@"INSERT INTO contas (id, processo_id, data_movimentacao, tipo_lancamento, historico, num_nf_alvara, valor_alvara, valor_conta, mov_processo, status_conta, responsavel, terapia_medicamento_nome, quantidade, mes_referencia, ano_referencia, observacoes)
                                VALUES (@id, @pid, @dt, @tp, @hist, @nf, @va, @vc, @mov, 'rascunho', @resp, @nm, @qt, @mr, @ar, @ob)",
                                new { id = Guid.NewGuid().ToString(), pid = _processoId, dt = FinData, tp = FinTipo, hist, nf = FinNf, va = vAlv, vc = vCon, mov, resp = _userLogado, nm = nomeItem, qt = FinQtd, mr = FinMes, ar = FinAno, ob = FinObs });
                 
-                // Limpa campos
                 FinValor = ""; FinItemTexto = ""; FinObs = "";
             }
             CarregarTudo();
@@ -292,7 +270,7 @@ namespace SistemaJuridico.ViewModels
         public void EditarConta(ContaGridDto dto)
         {
             if (dto == null) return;
-            var r = dto.Raw; // Dynamic dapper object
+            var r = dto.Raw; 
 
             _editingContaId = dto.Id;
             BtnSalvarContaTexto = "SALVAR ALTERAÇÃO";
@@ -325,7 +303,7 @@ namespace SistemaJuridico.ViewModels
         {
             _editingContaId = null;
             BtnSalvarContaTexto = "ADICIONAR AO RASCUNHO";
-            BtnSalvarContaCor = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)); // Material Blue
+            BtnSalvarContaCor = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)); 
             BtnCancelarEditVisibility = Visibility.Collapsed;
             FinValor = ""; FinObs = ""; FinNf = "";
         }
