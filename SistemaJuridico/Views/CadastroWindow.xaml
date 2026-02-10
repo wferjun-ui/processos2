@@ -12,28 +12,61 @@
             <materialDesign:Card Padding="20" Margin="0,0,0,20" UniformCornerRadius="8">
                 <StackPanel>
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
                         <StackPanel Margin="0,0,15,0">
                             <TextBox Text="{Binding Numero, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Número do Processo (CNJ)" Style="{StaticResource MaterialDesignOutlinedTextBox}" FontSize="14" FontWeight="Bold"/>
                             <CheckBox IsChecked="{Binding IsAntigo}" Content="Processo Antigo / Outro Formato" Margin="0,5,0,0"/>
                         </StackPanel>
-                        <TextBox Grid.Column="1" Text="{Binding Juiz}" materialDesign:HintAssist.Hint="Juiz / Vara" Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        
+                        <ComboBox Grid.Column="1" 
+                                  IsEditable="True" 
+                                  ItemsSource="{Binding SugestoesJuiz}" 
+                                  Text="{Binding Juiz, UpdateSourceTrigger=PropertyChanged}" 
+                                  materialDesign:HintAssist.Hint="Juiz / Vara" 
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"/>
                     </Grid>
 
                     <Grid Margin="0,15">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBox Text="{Binding Paciente}" materialDesign:HintAssist.Hint="Nome do Paciente (Parte Autora)" Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,15,0"/>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <ComboBox 
+                             IsEditable="True" 
+                             ItemsSource="{Binding SugestoesPaciente}"
+                             Text="{Binding Paciente, UpdateSourceTrigger=PropertyChanged}" 
+                             materialDesign:HintAssist.Hint="Nome do Paciente (Parte Autora)" 
+                             Style="{StaticResource MaterialDesignOutlinedComboBox}" 
+                             Margin="0,0,15,0"/>
+                             
                         <ComboBox Grid.Column="1" Text="{Binding Classificacao}" materialDesign:HintAssist.Hint="Classificação" Style="{StaticResource MaterialDesignOutlinedComboBox}">
-                            <ComboBoxItem Content="Cível"/><ComboBoxItem Content="Saúde"/><ComboBoxItem Content="Família"/><ComboBoxItem Content="Fazenda Pública"/>
+                            <ComboBoxItem Content="Cível"/>
+                            <ComboBoxItem Content="Saúde"/>
+                            <ComboBoxItem Content="Família"/>
+                            <ComboBoxItem Content="Fazenda Pública"/>
                         </ComboBox>
                     </Grid>
 
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
                         <ComboBox Text="{Binding GenitorTipo}" Style="{StaticResource MaterialDesignOutlinedComboBox}" Width="140" Margin="0,0,15,0">
-                            <ComboBoxItem Content="Genitor"/><ComboBoxItem Content="Representante"/>
+                            <ComboBoxItem Content="Genitor"/>
+                            <ComboBoxItem Content="Representante"/>
                         </ComboBox>
-                        <TextBox Grid.Column="1" Text="{Binding GenitorNome}" materialDesign:HintAssist.Hint="Nome do Responsável Legal" Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        
+                        <ComboBox Grid.Column="1" 
+                                  IsEditable="True"
+                                  ItemsSource="{Binding SugestoesGenitor}"
+                                  Text="{Binding GenitorNome, UpdateSourceTrigger=PropertyChanged}" 
+                                  materialDesign:HintAssist.Hint="Nome do Responsável Legal" 
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"/>
                     </Grid>
                 </StackPanel>
             </materialDesign:Card>
@@ -43,7 +76,10 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="0,5">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
                             <TextBox Text="{Binding Nome}" materialDesign:HintAssist.Hint="Nome do Réu"/>
                             <Button Grid.Column="1" Command="{Binding DataContext.RemoveReuCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Style="{StaticResource MaterialDesignFlatButton}" Content="X" Foreground="Red"/>
                         </Grid>
@@ -62,22 +98,45 @@
                             <materialDesign:Card Padding="10" Margin="0,5" Background="#F0FDFA" UniformCornerRadius="5">
                                 <StackPanel>
                                     <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
                                         <ComboBox Text="{Binding Tipo}" materialDesign:HintAssist.Hint="Tipo">
-                                            <ComboBoxItem Content="Medicamento"/><ComboBoxItem Content="Terapia"/><ComboBoxItem Content="Cirurgia"/><ComboBoxItem Content="Outros"/>
+                                            <ComboBoxItem Content="Medicamento"/>
+                                            <ComboBoxItem Content="Terapia"/>
+                                            <ComboBoxItem Content="Cirurgia"/>
+                                            <ComboBoxItem Content="Outros"/>
                                         </ComboBox>
-                                        <TextBox Grid.Column="1" Text="{Binding Nome}" materialDesign:HintAssist.Hint="Nome do Item / Procedimento" Margin="10,0"/>
+                                        
+                                        <ComboBox Grid.Column="1" IsEditable="True"
+                                                  ItemsSource="{Binding DataContext.SugestoesTratamento, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Text="{Binding Nome}" 
+                                                  materialDesign:HintAssist.Hint="Nome do Item / Procedimento" 
+                                                  Margin="10,0"/>
+                                                  
                                         <Button Grid.Column="2" Command="{Binding DataContext.RemoveSaudeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Content="X" Style="{StaticResource MaterialDesignIconForegroundButton}" Foreground="Red"/>
                                     </Grid>
                                     
                                     <Grid Margin="0,10,0,0">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
                                         <TextBox Text="{Binding Qtd}" materialDesign:HintAssist.Hint="Qtd" Margin="0,0,5,0"/>
                                         <ComboBox Grid.Column="1" Text="{Binding Frequencia}" materialDesign:HintAssist.Hint="Frequência" Margin="5,0">
-                                            <ComboBoxItem Content="Mensal"/><ComboBoxItem Content="Semanal"/><ComboBoxItem Content="Diário"/>
+                                            <ComboBoxItem Content="Mensal"/>
+                                            <ComboBoxItem Content="Semanal"/>
+                                            <ComboBoxItem Content="Diário"/>
                                         </ComboBox>
                                         <ComboBox Grid.Column="2" Text="{Binding Local}" materialDesign:HintAssist.Hint="Local" Margin="5,0">
-                                            <ComboBoxItem Content="Clínica"/><ComboBoxItem Content="Home Care"/><ComboBoxItem Content="SUS"/><ComboBoxItem Content="Particular"/>
+                                            <ComboBoxItem Content="Clínica"/>
+                                            <ComboBoxItem Content="Home Care"/>
+                                            <ComboBoxItem Content="SUS"/>
+                                            <ComboBoxItem Content="Particular"/>
                                         </ComboBox>
                                         <TextBox Grid.Column="3" Text="{Binding Data}" materialDesign:HintAssist.Hint="Data Início" Margin="5,0,0,0"/>
                                     </Grid>
