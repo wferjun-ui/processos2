@@ -29,10 +29,11 @@ namespace SistemaJuridico.Services
         {
             using var conn = GetConnection();
             conn.Open();
-            // Otimizações do Python (WAL Mode)
+            
+            // OTIMIZAÇÃO: Igual ao Python (WAL + Synchronous Normal)
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;");
 
-            // Schema Idêntico ao Python
+            // SCHEMA: Tabelas idênticas ao Python
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, 
@@ -73,6 +74,7 @@ namespace SistemaJuridico.Services
                     nome TEXT PRIMARY KEY, tipo TEXT);
             ");
 
+            // Garante que o Admin existe se o banco for novo
             SeedAdmin(conn);
         }
 
@@ -88,68 +90,94 @@ namespace SistemaJuridico.Services
             }
         }
 
+        // --- BACKUP AUTOMÁTICO (Igual Python BackupSystem) ---
         public void PerformBackup()
         {
-            try {
+            try
+            {
                 if (!Directory.Exists(_backupFolder)) Directory.CreateDirectory(_backupFolder);
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                File.Copy(_dbPath, Path.Combine(_backupFolder, $"backup_auto_{timestamp}.db"), true);
+                var backupPath = Path.Combine(_backupFolder, $"backup_auto_{timestamp}.db");
                 
+                File.Copy(_dbPath, backupPath, true);
+
                 // Mantém apenas os 10 últimos backups
                 var files = new DirectoryInfo(_backupFolder).GetFiles("*.db")
                     .OrderByDescending(f => f.CreationTime).Skip(10);
+                
                 foreach (var f in files) f.Delete();
-            } catch {}
+            }
+            catch { /* Ignora erro de backup para não travar app */ }
         }
 
+        // --- SEGURANÇA E LOGIN ---
         public string GenerateSalt() => Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLower();
         
-        public string HashPassword(string password, string salt) {
+        public string HashPassword(string password, string salt)
+        {
             using var sha256 = SHA256.Create();
             return Convert.ToHexString(sha256.ComputeHash(Encoding.UTF8.GetBytes(password + salt))).ToLower();
         }
 
-        public (bool Success, bool IsAdmin, string Username) Login(string username, string password) {
+        public (bool Success, bool IsAdmin, string Username) Login(string username, string password)
+        {
             using var conn = GetConnection();
-            var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE username = @u OR email = @u", new { u = username });
-            
+            // Permite login por Username ou Email (igual Python)
+            var user = conn.QueryFirstOrDefault("SELECT * FROM usuarios WHERE lower(username) = lower(@u) OR lower(email) = lower(@u)", new { u = username });
+
             if (user == null) return (false, false, "");
-            
-            // Verifica se o usuário tem senha definida (Fluxo de Primeiro Acesso do Python)
+
+            // Se o usuário existe mas não tem senha (apenas email autorizado), bloqueia login direto
             if (string.IsNullOrEmpty(user.password_hash)) return (false, false, "");
 
             string inputHash = HashPassword(password, user.salt ?? "");
-            if (user.password_hash == inputHash) return (true, user.is_admin == 1, user.username);
             
+            if (user.password_hash == inputHash)
+            {
+                return (true, user.is_admin == 1, user.username);
+            }
             return (false, false, "");
         }
 
-        // Feature Python: Registrar e-mail autorizado
-        public bool AuthorizeEmail(string email, bool isAdmin) {
+        // --- FUNÇÕES DE ADMINISTRAÇÃO DE USUÁRIOS (Igual Python AuthManager) ---
+
+        // 1. Admin autoriza um e-mail (sem senha)
+        public bool AuthorizeEmail(string email, bool isAdmin)
+        {
             using var conn = GetConnection();
-            try {
-                conn.Execute("INSERT INTO usuarios (id, email, username, is_admin) VALUES (@id, @e, @e, @a)",
+            try
+            {
+                conn.Execute("INSERT INTO usuarios (id, email, username, is_admin, password_hash, salt) VALUES (@id, @e, @e, @a, '', '')",
                     new { id = Guid.NewGuid().ToString(), e = email, a = isAdmin ? 1 : 0 });
                 return true;
-            } catch { return false; }
+            }
+            catch 
+            { 
+                return false; // Provavelmente e-mail duplicado 
+            }
         }
 
-        // Feature Python: Completar cadastro (Primeiro Acesso)
-        public string CompleteRegistration(string email, string newUser, string newPass) {
+        // 2. Usuário completa o cadastro (Define senha)
+        public string CompleteRegistration(string email, string newUsername, string newPassword)
+        {
             using var conn = GetConnection();
-            var user = conn.QueryFirstOrDefault("SELECT id FROM usuarios WHERE email = @e", new { e = email });
-            if (user == null) return "E-mail não autorizado.";
+            var user = conn.QueryFirstOrDefault("SELECT id FROM usuarios WHERE lower(email) = lower(@e)", new { e = email });
+            
+            if (user == null) return "E-mail não autorizado pelo administrador.";
 
-            // Se mudou o username, verifica colisão
-            if (email != newUser) {
-                var exists = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios WHERE username = @u", new { u = newUser });
-                if (exists > 0) return "Nome de usuário já existe.";
+            // Verifica colisão se mudar o username
+            if (email.ToLower() != newUsername.ToLower())
+            {
+                var exists = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios WHERE lower(username) = lower(@u)", new { u = newUsername });
+                if (exists > 0) return "Nome de usuário já está em uso.";
             }
 
             var salt = GenerateSalt();
-            var hash = HashPassword(newPass, salt);
-            conn.Execute("UPDATE usuarios SET username=@u, password_hash=@h, salt=@s WHERE email=@e",
-                new { u = newUser, h = hash, s = salt, e = email });
+            var hash = HashPassword(newPassword, salt);
+
+            conn.Execute("UPDATE usuarios SET username=@u, password_hash=@h, salt=@s WHERE lower(email)=lower(@e)",
+                new { u = newUsername, h = hash, s = salt, e = email });
+
             return "OK";
         }
     }
