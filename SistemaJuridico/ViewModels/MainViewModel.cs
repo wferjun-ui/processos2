@@ -10,14 +10,13 @@ using System.Windows.Media;
 
 namespace SistemaJuridico.ViewModels
 {
-    // Modelo de UI (blindado contra nulos)
     public class ProcessoModel
     {
-        public string Id { get; set; } = string.Empty;
-        public string Numero { get; set; } = string.Empty;
-        public string Paciente { get; set; } = string.Empty;
-        public string DataPrazo { get; set; } = string.Empty;
-        public string StatusTexto { get; set; } = string.Empty;
+        public string Id { get; set; } = "";
+        public string Numero { get; set; } = "";
+        public string Paciente { get; set; } = "";
+        public string DataPrazo { get; set; } = "";
+        public string StatusTexto { get; set; } = "";
         public SolidColorBrush StatusCor { get; set; } = Brushes.Gray;
     }
 
@@ -25,19 +24,33 @@ namespace SistemaJuridico.ViewModels
     {
         private readonly DatabaseService _db;
 
-        [ObservableProperty]
-        private ObservableCollection<ProcessoModel> _processos = new();
-
-        [ObservableProperty]
-        private string _searchText = "";
+        [ObservableProperty] private ObservableCollection<ProcessoModel> _processos = new();
+        [ObservableProperty] private string _searchText = "";
+        
+        // Controle de Visibilidade do botão Admin
+        [ObservableProperty] private Visibility _adminVisibility = Visibility.Collapsed;
 
         public MainViewModel()
         {
             _db = App.DB!;
+            VerificarPermissoes();
             CarregarDashboard();
         }
 
-        // Classe interna DTO para mapeamento do Banco (aceita nulos do SQLite)
+        private void VerificarPermissoes()
+        {
+            // Pega a propriedade salva no LoginViewModel
+            if (Application.Current.Properties.Contains("IsAdmin") && 
+                (bool)Application.Current.Properties["IsAdmin"] == true)
+            {
+                AdminVisibility = Visibility.Visible;
+            }
+            else
+            {
+                AdminVisibility = Visibility.Collapsed;
+            }
+        }
+
         private class ProcessoDto
         {
             public string? id { get; set; }
@@ -50,26 +63,27 @@ namespace SistemaJuridico.ViewModels
         public void NovoProcesso()
         {
             var janela = new Views.CadastroWindow();
-            if (Application.Current.MainWindow != null)
-            {
-                janela.Owner = Application.Current.MainWindow;
-            }
-            
+            if (Application.Current.MainWindow != null) janela.Owner = Application.Current.MainWindow;
             janela.ShowDialog();
-            CarregarDashboard(); // Recarrega lista ao voltar
+            CarregarDashboard();
+        }
+        
+        // NOVO: Comando para abrir o painel admin
+        [RelayCommand]
+        public void AbrirAdmin()
+        {
+            var janela = new Views.AdminWindow();
+            if (Application.Current.MainWindow != null) janela.Owner = Application.Current.MainWindow;
+            janela.ShowDialog();
         }
 
         [RelayCommand]
         public void AbrirDetalhes(string id)
         {
             if (string.IsNullOrEmpty(id)) return;
-
             var janela = new Views.ProcessoDetalhesWindow();
             janela.DataContext = new ProcessoDetalhesViewModel(id);
-            
-            if (Application.Current.MainWindow != null)
-                janela.Owner = Application.Current.MainWindow;
-
+            if (Application.Current.MainWindow != null) janela.Owner = Application.Current.MainWindow;
             janela.ShowDialog();
             CarregarDashboard();
         }
@@ -89,12 +103,7 @@ namespace SistemaJuridico.ViewModels
             using var conn = _db.GetConnection();
             
             var sql = "SELECT id, numero, paciente, cache_proximo_prazo FROM processos";
-            
-            if (!string.IsNullOrEmpty(SearchText))
-            {
-                sql += " WHERE numero LIKE @q OR paciente LIKE @q";
-            }
-            
+            if (!string.IsNullOrEmpty(SearchText)) sql += " WHERE numero LIKE @q OR paciente LIKE @q";
             sql += " ORDER BY cache_proximo_prazo ASC";
 
             var dados = conn.Query<ProcessoDto>(sql, new { q = $"%{SearchText}%" });
@@ -103,7 +112,6 @@ namespace SistemaJuridico.ViewModels
             {
                 var prazo = item.cache_proximo_prazo ?? "";
                 var (texto, cor) = CalcularStatus(prazo);
-
                 Processos.Add(new ProcessoModel
                 {
                     Id = item.id ?? "",
@@ -119,17 +127,14 @@ namespace SistemaJuridico.ViewModels
         private (string, SolidColorBrush) CalcularStatus(string dataStr)
         {
             if (string.IsNullOrEmpty(dataStr)) return ("Sem Prazo", Brushes.Gray);
-
             if (DateTime.TryParseExact(dataStr, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime prazo))
             {
                 var dias = (prazo.Date - DateTime.Now.Date).TotalDays;
-                
                 if (dias < 0) return ("ATRASADO", Brushes.Red);
                 if (dias == 0) return ("VENCE HOJE", Brushes.OrangeRed);
                 if (dias <= 7) return ($"Vence em {dias} dias", Brushes.Goldenrod);
                 return ("No Prazo", Brushes.Green);
             }
-            
             return ("Data Inválida", Brushes.Gray);
         }
     }
