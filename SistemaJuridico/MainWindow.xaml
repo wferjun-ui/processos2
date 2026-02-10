@@ -1,0 +1,67 @@
+<Window x:Class="SistemaJuridico.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:SistemaJuridico.ViewModels"
+        mc:Ignorable="d"
+        Title="Sistema Jurídico Pro" Height="700" Width="1000"
+        WindowStartupLocation="CenterScreen"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        Background="{DynamicResource MaterialDesignPaper}">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="White" Effect="{StaticResource MaterialDesignShadowDepth1}">
+            <StackPanel Margin="10">
+                <TextBlock Text="JURÍDICO" FontSize="24" FontWeight="Bold" Foreground="#2563EB" Margin="20,30,0,30"/>
+                
+                <Button Content="DASHBOARD" Style="{StaticResource MaterialDesignFlatButton}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="50"/>
+                <Button Content="NOVO PROCESSO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="50"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Painel de Controle" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,20"/>
+
+            <DataGrid Grid.Row="1" ItemsSource="{Binding Processos}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                      materialDesign:DataGridAssist.CellPadding="10">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Status" Binding="{Binding StatusTexto}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{Binding StatusCor}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Processo" Binding="{Binding Numero}" Width="150"/>
+                    <DataGridTextColumn Header="Paciente" Binding="{Binding Paciente}" Width="*"/>
+                    <DataGridTextColumn Header="Prazo Limite" Binding="{Binding DataPrazo}"/>
+                    
+                    <DataGridTemplateColumn>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="ABRIR" Style="{StaticResource MaterialDesignOutlinedButton}" Height="25" Padding="10,0"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </Grid>
+</Window>
