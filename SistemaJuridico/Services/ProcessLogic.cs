@@ -7,7 +7,7 @@ namespace SistemaJuridico.Services
 {
     public static class ProcessLogic
     {
-        // --- FORMATAÇÃO CNJ (Igual ao Python: format_cnj_realtime) ---
+        // Python: format_cnj_realtime
         public static string FormatCNJ(string value)
         {
             if (string.IsNullOrEmpty(value)) return "";
@@ -22,38 +22,39 @@ namespace SistemaJuridico.Services
             return v;
         }
 
-        // --- CÁLCULO DE PRAZOS (Igual ao Python: calculate_due_dates) ---
-        // Regra: Data Base + 14 dias. Se cair fds, joga pra segunda.
-        public static (string proximoPrazo, string dataNotificacao) CalculateDueDates(string? dataBaseStr)
+        // Python: calculate_due_dates
+        public static (string proximoPrazo, string dataNotificacao) CalculateDueDates(string? dataBaseStr, string? manualDateStr = null)
         {
+            // Se o usuário digitou uma data manual válida, usa ela como base para cálculo reverso
+            if (!string.IsNullOrWhiteSpace(manualDateStr) && DateTime.TryParseExact(manualDateStr, "dd/MM/yyyy", null, DateTimeStyles.None, out DateTime manualDate))
+            {
+                return (manualDate.ToString("dd/MM/yyyy"), manualDate.AddDays(-7).ToString("dd/MM/yyyy"));
+            }
+
             DateTime baseDate = DateTime.Now;
             if (!string.IsNullOrWhiteSpace(dataBaseStr) && DateTime.TryParseExact(dataBaseStr, "dd/MM/yyyy", null, DateTimeStyles.None, out DateTime parsed))
+            {
                 baseDate = parsed;
+            }
 
+            // Regra Python: base + 14 dias. Se cair FDS, joga para segunda.
             DateTime futureDate = baseDate.AddDays(14);
             
-            // Lógica Python: days_ahead = (7 - future_date.weekday()) % 7. 
-            // Em C#, DayOfWeek: Domingo=0, ... Sábado=6.
-            // Python Monday=0... Sunday=6. Ajuste para lógica de "Próxima Segunda ou Terça":
-            int daysAhead = 0;
-            if (futureDate.DayOfWeek == DayOfWeek.Saturday) daysAhead = 2; // +2 dias = Segunda
-            else if (futureDate.DayOfWeek == DayOfWeek.Sunday) daysAhead = 1; // +1 dia = Segunda
-            else daysAhead = 7; // Se cair em dia útil, joga +1 semana (padrão do script original) ou ajuste conforme preferência.
-            
-            // Ajuste fino para bater com o script Python exato:
-            // O script python usava: days_ahead = (7 - weekday) % 7. Se 0, vira 7.
-            // Isso sempre joga para o próximo dia da semana igual ao calculado + 1 semana se for o mesmo dia.
-            // Vamos simplificar para garantir dia útil:
+            // Lógica Python: days_ahead = (7 - future_date.weekday()) % 7.
+            // Se for Sábado (6) -> 7-6 = 1 dia (Domingo) -> +1 = Segunda. 
+            // Se for Domingo (0) -> No Python Domingo é 6. Vamos simplificar garantindo dia útil:
             while (futureDate.DayOfWeek == DayOfWeek.Saturday || futureDate.DayOfWeek == DayOfWeek.Sunday)
+            {
                 futureDate = futureDate.AddDays(1);
+            }
 
-            DateTime proximoPrazo = futureDate; 
+            DateTime proximoPrazo = futureDate;
             DateTime notificacao = proximoPrazo.AddDays(-7);
 
             return (proximoPrazo.ToString("dd/MM/yyyy"), notificacao.ToString("dd/MM/yyyy"));
         }
 
-        // --- STATUS E CORES (Igual ao Python: check_prazo_status) ---
+        // Python: check_prazo_status
         public static (string texto, SolidColorBrush cor) CheckPrazoStatus(string proximoPrazoStr)
         {
             if (string.IsNullOrEmpty(proximoPrazoStr)) 
@@ -71,12 +72,14 @@ namespace SistemaJuridico.Services
             return ("Data Inválida", new SolidColorBrush((Color)ColorConverter.ConvertFromString("#64748B")));
         }
 
+        // Python: parse_currency / format_money_input
         public static decimal ParseMoney(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return 0;
-            // Remove R$, espaços e converte formato PT-BR (1.000,00) para decimal
-            string clean = Regex.Replace(value, @"[^\d,]", ""); 
-            if (decimal.TryParse(clean, NumberStyles.Number, new CultureInfo("pt-BR"), out decimal result)) return result;
+            // Remove tudo que não é dígito ou vírgula
+            string clean = Regex.Replace(value, @"[^\d,]", "");
+            if (decimal.TryParse(clean, NumberStyles.Number, new CultureInfo("pt-BR"), out decimal result)) 
+                return result;
             return 0;
         }
     }
