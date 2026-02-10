@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:vm="clr-namespace:SistemaJuridico.ViewModels"
-        Title="Sistema Jurídico Pro" Height="700" Width="1000"
+        Title="Sistema Jurídico Pro" Height="720" Width="1080"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}">
 
@@ -13,51 +13,76 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="260"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Background="White" Effect="{StaticResource MaterialDesignShadowDepth1}">
             <StackPanel Margin="10">
-                <TextBlock Text="JURÍDICO" FontSize="24" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}" Margin="20,30,0,30"/>
+                <StackPanel Orientation="Horizontal" Margin="20,30,0,30">
+                    <materialDesign:PackIcon Kind="ScaleBalance" Width="30" Height="30" Foreground="{StaticResource PrimaryHueMidBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="JURÍDICO" FontSize="22" FontWeight="Bold" Foreground="{StaticResource PrimaryHueMidBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
                 
-                <Button Command="{Binding CarregarDashboardCommand}" Content="DASHBOARD" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50"/>
-                <Button Command="{Binding NovoProcessoCommand}" Content="NOVO PROCESSO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50"/>
+                <Button Command="{Binding CarregarDashboardCommand}" Content="DASHBOARD" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" FontSize="14"/>
+                <Button Command="{Binding NovoProcessoCommand}" Content="NOVO PROCESSO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" FontSize="14"/>
                 
                 <Button Command="{Binding AbrirAdminCommand}" Visibility="{Binding AdminVisibility}" 
-                        Content="ADMINISTRAÇÃO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" Foreground="Purple"/>
+                        Content="ADMINISTRAÇÃO" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" Foreground="Purple" FontWeight="Bold"/>
 
                 <Separator Margin="0,20"/>
-                <Button Command="{Binding SairCommand}" Content="SAIR" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" Foreground="Red"/>
+                <Button Command="{Binding SairCommand}" Content="SAIR DO SISTEMA" Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Height="50" Foreground="Red"/>
             </StackPanel>
         </Border>
 
         <Grid Grid.Column="1" Margin="30">
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                <materialDesign:PackIcon Kind="ViewDashboard" Width="30" Height="30" VerticalAlignment="Center"/>
-                <TextBlock Text="Painel de Controle" FontSize="24" FontWeight="SemiBold" Margin="10,0,0,0"/>
+                <materialDesign:PackIcon Kind="ViewDashboard" Width="35" Height="35" VerticalAlignment="Center" Foreground="#555"/>
+                <TextBlock Text="Painel de Processos" FontSize="26" FontWeight="SemiBold" Margin="15,0,0,0" VerticalAlignment="Center" Foreground="#333"/>
                 
-                <TextBox Width="300" Margin="40,0,0,0" materialDesign:HintAssist.Hint="Pesquisar..." Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-                <Button Command="{Binding CarregarDashboardCommand}" Content="{materialDesign:PackIcon Magnify}" Style="{StaticResource MaterialDesignIconButton}"/>
+                <Border CornerRadius="20" Background="White" Margin="50,0,0,0" Padding="10,5" Effect="{StaticResource MaterialDesignShadowDepth1}" Width="400">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Buscar por nome ou número..." BorderThickness="0" VerticalAlignment="Center" FontSize="14"/>
+                        <Button Grid.Column="1" Command="{Binding CarregarDashboardCommand}" Style="{StaticResource MaterialDesignToolButton}">
+                            <materialDesign:PackIcon Kind="Magnify" Opacity="0.5"/>
+                        </Button>
+                    </Grid>
+                </Border>
             </StackPanel>
 
-            <DataGrid Grid.Row="1" ItemsSource="{Binding Processos}" AutoGenerateColumns="False" IsReadOnly="True" materialDesign:DataGridAssist.CellPadding="10">
+            <DataGrid Grid.Row="1" ItemsSource="{Binding Processos}" AutoGenerateColumns="False" IsReadOnly="True" 
+                      materialDesign:DataGridAssist.CellPadding="12" SelectionMode="Single"
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="50">
+                    <DataGridTemplateColumn Width="70">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Button Command="{Binding DataContext.AbrirDetalhesCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
-                                        CommandParameter="{Binding Id}" Content="Abrir" Height="25" Padding="5,0"/>
+                                        CommandParameter="{Binding Id}" Content="{materialDesign:PackIcon OpenInNew}" 
+                                        Style="{StaticResource MaterialDesignIconButton}" ToolTip="Abrir Detalhes"/>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     
-                    <DataGridTextColumn Header="Status" Binding="{Binding StatusTexto}" FontWeight="Bold"/>
-                    <DataGridTextColumn Header="Processo" Binding="{Binding Numero}"/>
-                    <DataGridTextColumn Header="Paciente" Binding="{Binding Paciente}" Width="*"/>
-                    <DataGridTextColumn Header="Próx. Prazo" Binding="{Binding DataPrazo}"/>
+                    <DataGridTemplateColumn Header="Status" SortMemberPath="StatusTexto">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Background="{Binding StatusCor}" CornerRadius="10" Padding="10,4">
+                                    <TextBlock Text="{Binding StatusTexto}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Número CNJ" Binding="{Binding Numero}" FontWeight="Bold"/>
+                    <DataGridTextColumn Header="Paciente / Cliente" Binding="{Binding Paciente}" Width="*"/>
+                    <DataGridTextColumn Header="Próximo Prazo" Binding="{Binding DataPrazo}"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>
