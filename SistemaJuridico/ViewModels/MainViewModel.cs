@@ -34,14 +34,17 @@ namespace SistemaJuridico.ViewModels
             CarregarDashboard();
         }
 
-        // Classe interna para mapear o banco de dados (Evita o erro CS8133)
+        // --- CORREÇÃO AQUI ---
+        // 1. Inicializamos com string.Empty para evitar avisos de não-nulo.
+        // 2. cache_proximo_prazo virou string? porque no banco pode ser NULL.
         private class ProcessoDto
         {
-            public string id { get; set; }
-            public string numero { get; set; }
-            public string paciente { get; set; }
-            public string cache_proximo_prazo { get; set; }
+            public string id { get; set; } = string.Empty;
+            public string numero { get; set; } = string.Empty;
+            public string paciente { get; set; } = string.Empty;
+            public string? cache_proximo_prazo { get; set; }
         }
+        // ---------------------
 
         [RelayCommand]
         public void CarregarDashboard()
@@ -49,12 +52,11 @@ namespace SistemaJuridico.ViewModels
             Processos.Clear();
             using var conn = _db.GetConnection();
             
-            // Correção: Usamos <ProcessoDto> para garantir que o 'item' não seja dynamic
+            // Dapper preencherá as propriedades automaticamente
             var dados = conn.Query<ProcessoDto>("SELECT id, numero, paciente, cache_proximo_prazo FROM processos");
 
             foreach (var item in dados)
             {
-                // Como 'item' agora é fortemente tipado, o compilador aceita a desconstrução
                 var (texto, cor) = CalcularStatus(item.cache_proximo_prazo);
 
                 Processos.Add(new ProcessoModel
@@ -62,7 +64,8 @@ namespace SistemaJuridico.ViewModels
                     Id = item.id,
                     Numero = item.numero,
                     Paciente = item.paciente,
-                    DataPrazo = item.cache_proximo_prazo,
+                    // Garante que não passamos null para a View, usando string vazia se for nulo
+                    DataPrazo = item.cache_proximo_prazo ?? "", 
                     StatusTexto = texto,
                     StatusCor = cor
                 });
