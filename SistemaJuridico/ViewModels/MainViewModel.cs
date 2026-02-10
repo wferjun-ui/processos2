@@ -4,16 +4,20 @@ using Dapper;
 using SistemaJuridico.Services;
 using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
 namespace SistemaJuridico.ViewModels
 {
+    // CORREÇÃO AQUI: Adicionados Juiz e Classificacao
     public class ProcessoModel
     {
         public string Id { get; set; } = "";
         public string Numero { get; set; } = "";
         public string Paciente { get; set; } = "";
+        public string Juiz { get; set; } = "";          // <--- Adicionado
+        public string Classificacao { get; set; } = ""; // <--- Adicionado
         public string DataPrazo { get; set; } = "";
         public string StatusTexto { get; set; } = "";
         public SolidColorBrush StatusCor { get; set; } = Brushes.Gray;
@@ -43,7 +47,16 @@ namespace SistemaJuridico.ViewModels
             else { AdminVisibility = Visibility.Collapsed; }
         }
 
-        private class ProcessoDto { public string? id { get; set; } public string? numero { get; set; } public string? paciente { get; set; } public string? cache_proximo_prazo { get; set; } }
+        // DTO interno para leitura do banco (mapeia colunas do SQLite)
+        private class ProcessoDto 
+        { 
+            public string? id { get; set; } 
+            public string? numero { get; set; } 
+            public string? paciente { get; set; } 
+            public string? juiz { get; set; }
+            public string? classificacao { get; set; }
+            public string? cache_proximo_prazo { get; set; } 
+        }
 
         [RelayCommand]
         public void NovoProcesso()
@@ -86,18 +99,19 @@ namespace SistemaJuridico.ViewModels
         {
             Processos.Clear();
             using var conn = _db.GetConnection();
-            var sql = "SELECT id, numero, paciente, cache_proximo_prazo FROM processos";
-            if (!string.IsNullOrEmpty(SearchText)) sql += " WHERE numero LIKE @q OR paciente LIKE @q";
             
-            // Ordenação por data (String dd/mm/yyyy no SQLite não ordena bem por padrão, mas para simplicidade manteremos a query)
-            // Idealmente converter para YYYY-MM-DD no banco, mas a lógica Python usa dd/mm/yyyy.
-            // Vamos ordenar em memória ou aceitar a ordem de inserção por enquanto.
+            // Query ajustada para trazer mais dados se necessário no futuro
+            var sql = "SELECT id, numero, paciente, juiz, classificacao, cache_proximo_prazo FROM processos";
+            
+            if (!string.IsNullOrEmpty(SearchText)) 
+                sql += " WHERE numero LIKE @q OR paciente LIKE @q";
+            
+            sql += " ORDER BY cache_proximo_prazo ASC"; // Ordenação básica por string de data
             
             var dados = conn.Query<ProcessoDto>(sql, new { q = $"%{SearchText}%" });
 
             foreach (var item in dados)
             {
-                // USA A LÓGICA CENTRALIZADA PARA CORES
                 var (texto, cor) = ProcessLogic.CheckPrazoStatus(item.cache_proximo_prazo ?? "");
                 
                 Processos.Add(new ProcessoModel
@@ -105,6 +119,8 @@ namespace SistemaJuridico.ViewModels
                     Id = item.id ?? "",
                     Numero = item.numero ?? "",
                     Paciente = item.paciente ?? "",
+                    Juiz = item.juiz ?? "",
+                    Classificacao = item.classificacao ?? "",
                     DataPrazo = item.cache_proximo_prazo ?? "--",
                     StatusTexto = texto,
                     StatusCor = cor
