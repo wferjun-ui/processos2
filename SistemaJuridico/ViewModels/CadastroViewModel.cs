@@ -9,10 +9,8 @@ using System.Linq;
 
 namespace SistemaJuridico.ViewModels
 {
-    // DTOs auxiliares
     public partial class ReuDto : ObservableObject { [ObservableProperty] private string _nome = ""; }
 
-    // --- CLASSE QUE FALTAVA ---
     public partial class ItemCadastroDto : ObservableObject 
     {
         [ObservableProperty] private string _tipo = "Medicamento";
@@ -22,13 +20,12 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private string _local = "Clínica";
         [ObservableProperty] private string _data = "";
     }
-    // --------------------------
 
     public partial class CadastroViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
         private readonly Action _closeAction;
-        private string _processoIdEdit;
+        private string? _processoIdEdit;
 
         [ObservableProperty] private string _tituloJanela = "Novo Processo";
         [ObservableProperty] private string _numero = "";
@@ -41,7 +38,6 @@ namespace SistemaJuridico.ViewModels
         [ObservableProperty] private Visibility _saudeVisibility = Visibility.Collapsed;
         [ObservableProperty] private Visibility _btnExcluirVisibility = Visibility.Collapsed;
 
-        // Autocomplete Collections
         public ObservableCollection<string> SugestoesJuiz { get; set; } = new();
         public ObservableCollection<string> SugestoesPaciente { get; set; } = new();
         public ObservableCollection<string> SugestoesGenitor { get; set; } = new();
@@ -50,7 +46,7 @@ namespace SistemaJuridico.ViewModels
         public ObservableCollection<ItemCadastroDto> ItensSaude { get; set; } = new();
         public ObservableCollection<string> SugestoesTratamento { get; set; } = new();
 
-        public CadastroViewModel(Action closeAction, string processoId = null)
+        public CadastroViewModel(Action closeAction, string? processoId = null)
         {
             _db = App.DB!;
             _closeAction = closeAction;
@@ -62,10 +58,6 @@ namespace SistemaJuridico.ViewModels
             else Reus.Add(new ReuDto());
         }
 
-        // --- LÓGICA DE AUTOCOMPLETE SIMULADA ---
-        // Em WPF puro, a View deve bindar 'TextChanged' ou usar um ComboBox IsEditable
-        // Aqui simulamos buscando do banco quando a propriedade muda
-        
         partial void OnJuizChanged(string value) => BuscarSugestao("juiz", value, SugestoesJuiz);
         partial void OnPacienteChanged(string value) => BuscarSugestao("paciente", value, SugestoesPaciente);
         partial void OnGenitorNomeChanged(string value) => BuscarSugestao("genitor_rep_nome", value, SugestoesGenitor);
@@ -73,7 +65,6 @@ namespace SistemaJuridico.ViewModels
         private void BuscarSugestao(string campo, string termo, ObservableCollection<string> lista)
         {
             if (string.IsNullOrWhiteSpace(termo) || termo.Length < 2) return;
-            // Debounce seria ideal, mas para local DB é rápido o suficiente
             using var conn = _db.GetConnection();
             var results = conn.Query<string>($"SELECT DISTINCT {campo} FROM processos WHERE {campo} LIKE @q LIMIT 5", new { q = $"%{termo}%" });
             
@@ -94,20 +85,25 @@ namespace SistemaJuridico.ViewModels
             using var conn = _db.GetConnection();
             var p = conn.QueryFirstOrDefault("SELECT * FROM processos WHERE id=@id", new { id });
             
-            Numero = p.numero; IsAntigo = p.is_antigo == 1; 
-            // Preenche sem disparar o autocomplete loucamente
-            _paciente = p.paciente; OnPropertyChanged(nameof(Paciente));
-            _juiz = p.juiz; OnPropertyChanged(nameof(Juiz));
-            _genitorNome = p.genitor_rep_nome; OnPropertyChanged(nameof(GenitorNome));
+            if (p == null) return;
+
+            Numero = p.numero; 
+            IsAntigo = p.is_antigo == 1; 
             
-            Classificacao = p.classificacao; GenitorTipo = p.genitor_rep_tipo;
+            // Atribuição via propriedades para evitar aviso MVVMTK0034
+            Paciente = p.paciente; 
+            Juiz = p.juiz; 
+            GenitorNome = p.genitor_rep_nome; 
+            
+            Classificacao = p.classificacao; 
+            GenitorTipo = p.genitor_rep_tipo;
             
             var rs = conn.Query("SELECT nome FROM reus WHERE processo_id=@id", new { id });
             foreach(var r in rs) Reus.Add(new ReuDto { Nome = r.nome });
 
             if (Classificacao == "Saúde") {
                 SaudeVisibility = Visibility.Visible;
-                var its = conn.Query<ItemCadastroDto>("SELECT tipo as Tipo, nome as Nome, qtd as Qtd, frequencia as Frequencia, local as Local, data_prescricao as Data FROM itens_saude WHERE processo_id=@id", new { id });
+                var its = conn.Query<ItemCadastroDto>("SELECT tipo, nome, qtd, frequencia, local, data_prescricao as Data FROM itens_saude WHERE processo_id=@id", new { id });
                 foreach(var i in its) ItensSaude.Add(i);
             }
         }
