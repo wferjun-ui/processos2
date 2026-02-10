@@ -8,12 +8,7 @@ using System.Windows;
 
 namespace SistemaJuridico.ViewModels
 {
-    // DTOs auxiliares para as listas dinâmicas
-    public partial class ReuDto : ObservableObject 
-    { 
-        [ObservableProperty] private string _nome = ""; 
-    }
-
+    public partial class ReuDto : ObservableObject { [ObservableProperty] private string _nome = ""; }
     public partial class ItemDto : ObservableObject 
     { 
         [ObservableProperty] private string _tipo = "Medicamento"; 
@@ -29,21 +24,18 @@ namespace SistemaJuridico.ViewModels
         private readonly DatabaseService _db;
         private readonly Action _closeAction;
         
-        // Campos Principais
         [ObservableProperty] private string _numero = "";
         [ObservableProperty] private bool _isAntigo;
         [ObservableProperty] private string _paciente = "";
         [ObservableProperty] private string _juiz = "";
-        [ObservableProperty] private string _classificacao = "Cível"; // Cível, Saúde, Família...
+        [ObservableProperty] private string _classificacao = "Cível";
         
-        // Genitor / Representante
+        // CAMPOS QUE ESTAVAM FALTANDO NO INSERT:
         [ObservableProperty] private string _genitorNome = "";
-        [ObservableProperty] private string _genitorTipo = "Genitor"; // "Genitor" ou "Representante"
+        [ObservableProperty] private string _genitorTipo = "Genitor";
         
-        // Controle de Visibilidade (Igual ao Python: on_class)
         [ObservableProperty] private Visibility _saudeVisibility = Visibility.Collapsed;
 
-        // Listas Dinâmicas
         public ObservableCollection<ReuDto> Reus { get; set; } = new();
         public ObservableCollection<ItemDto> ItensSaude { get; set; } = new();
 
@@ -51,16 +43,11 @@ namespace SistemaJuridico.ViewModels
         {
             _db = App.DB!;
             _closeAction = closeAction;
-            Reus.Add(new ReuDto()); // Começa com 1 réu vazio
+            Reus.Add(new ReuDto());
         }
 
-        // Trigger quando muda a classificação (Lógica do Python)
-        partial void OnClassificacaoChanged(string value)
-        {
-            SaudeVisibility = value == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
-        }
+        partial void OnClassificacaoChanged(string value) => SaudeVisibility = value == "Saúde" ? Visibility.Visible : Visibility.Collapsed;
 
-        // Trigger formatação CNJ
         partial void OnNumeroChanged(string value)
         {
             if (IsAntigo) return;
@@ -70,17 +57,15 @@ namespace SistemaJuridico.ViewModels
 
         [RelayCommand] public void AddReu() => Reus.Add(new ReuDto());
         [RelayCommand] public void RemoveReu(ReuDto item) => Reus.Remove(item);
-        
         [RelayCommand] public void AddSaude() => ItensSaude.Add(new ItemDto());
         [RelayCommand] public void RemoveSaude(ItemDto item) => ItensSaude.Remove(item);
 
         [RelayCommand]
         public void Salvar()
         {
-            // Validação Básica
             if (string.IsNullOrWhiteSpace(Numero) || string.IsNullOrWhiteSpace(Paciente))
             {
-                MessageBox.Show("Campos obrigatórios: Número do Processo e Paciente.");
+                MessageBox.Show("Preencha o Número e o Paciente.");
                 return;
             }
 
@@ -92,23 +77,19 @@ namespace SistemaJuridico.ViewModels
 
                 var procId = Guid.NewGuid().ToString();
                 var hoje = DateTime.Now;
-                
-                // Cálculo inicial de prazo (14 dias)
                 var (dataPrazo, _) = ProcessLogic.CalculateDueDates(hoje.ToString("dd/MM/yyyy"));
-                
                 var user = Application.Current.Properties["Usuario"]?.ToString() ?? "Admin";
 
-                // 1. Salvar Processo
+                // SQL ATUALIZADO COM OS CAMPOS DE GENITOR
                 conn.Execute(@"
                     INSERT INTO processos (id, numero, is_antigo, paciente, juiz, genitor_rep_nome, genitor_rep_tipo, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
                     VALUES (@id, @n, @ia, @p, @j, @gn, @gt, @c, 'Conhecimento', @ua, @cp)",
                     new { 
                         id = procId, n = Numero, ia = IsAntigo ? 1 : 0, p = Paciente, j = Juiz, 
-                        gn = GenitorNome, gt = GenitorTipo, c = Classificacao, 
+                        gn = GenitorNome, gt = GenitorTipo, c = Classificacao, // <--- Aqui estão os dados
                         ua = hoje.ToString("dd/MM/yyyy"), cp = dataPrazo 
                     }, trans);
 
-                // 2. Salvar Réus
                 foreach (var r in Reus)
                 {
                     if (!string.IsNullOrWhiteSpace(r.Nome))
@@ -116,7 +97,6 @@ namespace SistemaJuridico.ViewModels
                             new { id = Guid.NewGuid().ToString(), pid = procId, n = r.Nome }, trans);
                 }
 
-                // 3. Salvar Itens de Saúde (Se for Saúde)
                 if (Classificacao == "Saúde")
                 {
                     foreach (var i in ItensSaude)
@@ -128,22 +108,15 @@ namespace SistemaJuridico.ViewModels
                     }
                 }
 
-                // 4. Criar Verificação Inicial (Log)
-                conn.Execute(@"
-                    INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, proximo_prazo_padrao, alteracoes_texto) 
-                    VALUES (@id, @pid, @dh, 'Cadastro Inicial', @resp, @pp, 'Processo Criado')",
+                conn.Execute("INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, proximo_prazo_padrao, alteracoes_texto) VALUES (@id, @pid, @dh, 'Cadastro Inicial', @resp, @pp, 'Processo Criado')",
                     new { id = Guid.NewGuid().ToString(), pid = procId, dh = hoje.ToString("s"), resp = user, pp = dataPrazo }, trans);
 
                 trans.Commit();
                 _db.PerformBackup();
-                
                 MessageBox.Show("Processo cadastrado com sucesso!");
                 _closeAction();
             }
-            catch (Exception ex) 
-            { 
-                MessageBox.Show($"Erro crítico ao salvar: {ex.Message}"); 
-            }
+            catch (Exception ex) { MessageBox.Show("Erro ao salvar: " + ex.Message); }
         }
     }
 }
