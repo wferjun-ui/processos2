@@ -1,21 +1,20 @@
+; Este valor será sobrescrito automaticamente pelo GitHub Actions
+#define MyAppVersion "1.0.0" 
 #define MyAppName "Sistema Juridico Pro"
-#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Setor Juridico"
 #define MyAppExeName "SistemaJuridico.exe"
 
 [Setup]
-; AppId único para identificar a instalação
 AppId={{C8686620-1383-4318-97C3-890251148899}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-; Instala na AppData do usuário (Não pede Admin)
+; Instala na pasta do usuário (Não pede senha de Admin)
 DefaultDirName={userappdata}\{#MyAppName}
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
-; Pasta onde o instalador final será salvo
 OutputDir=Output
-OutputBaseFilename=Instalador_SistemaJuridico_v2
+OutputBaseFilename=Instalador_SistemaJuridico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -28,9 +27,9 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Pega o EXE gerado pelo dotnet publish na pasta ReleaseOutput
+; Pega o executável gerado
 Source: "ReleaseOutput\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; Copia quaisquer DLLs ou configs extras
+; Pega DLLs e arquivos de configuração (JSON, etc)
 Source: "ReleaseOutput\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
