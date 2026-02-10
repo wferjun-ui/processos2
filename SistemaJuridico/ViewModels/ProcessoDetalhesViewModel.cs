@@ -219,7 +219,9 @@ namespace SistemaJuridico.ViewModels
                     container.Page(page =>
                     {
                         page.Margin(50);
-                        page.Header().Text($"Relatório Financeiro - Processo {Processo.Numero}").FontSize(20).SemiBold().FontColor(Colors.Blue.Medium);
+                        // CORREÇÃO: Usando QuestPDF.Helpers.Colors explicitamente para evitar conflito
+                        page.Header().Text($"Relatório Financeiro - Processo {Processo.Numero}")
+                            .FontSize(20).SemiBold().FontColor(QuestPDF.Helpers.Colors.Blue.Medium);
                         
                         page.Content().PaddingVertical(10).Table(table =>
                         {
@@ -243,8 +245,11 @@ namespace SistemaJuridico.ViewModels
                             {
                                 table.Cell().Text(item.Data);
                                 table.Cell().Text(item.Historico);
-                                table.Cell().AlignRight().Text(item.ValorAlvara > 0 ? $"{item.ValorAlvara:N2}" : "-").FontColor(Colors.Green.Medium);
-                                table.Cell().AlignRight().Text(item.ValorConta > 0 ? $"{item.ValorConta:N2}" : "-").FontColor(Colors.Red.Medium);
+                                // CORREÇÃO: Usando QuestPDF.Helpers.Colors explicitamente
+                                table.Cell().AlignRight().Text(item.ValorAlvara > 0 ? $"{item.ValorAlvara:N2}" : "-")
+                                    .FontColor(QuestPDF.Helpers.Colors.Green.Medium);
+                                table.Cell().AlignRight().Text(item.ValorConta > 0 ? $"{item.ValorConta:N2}" : "-")
+                                    .FontColor(QuestPDF.Helpers.Colors.Red.Medium);
                             }
                         });
 
@@ -268,9 +273,46 @@ namespace SistemaJuridico.ViewModels
         [RelayCommand]
         public void SalvarVerificacao()
         {
-            // (Mesma lógica do código anterior...)
-            // Devido ao limite de tamanho, mantenha a lógica de SalvarVerificacao que já forneci antes, 
-            // apenas certifique-se de usar _db = App.DB! no construtor.
+             try
+            {
+                using var conn = _db.GetConnection();
+                var usuario = Application.Current.Properties["Usuario"]?.ToString() ?? "Sistema";
+                
+                var dataBase = DateTime.Now.AddDays(14);
+                if (dataBase.DayOfWeek == DayOfWeek.Saturday) dataBase = dataBase.AddDays(2);
+                if (dataBase.DayOfWeek == DayOfWeek.Sunday) dataBase = dataBase.AddDays(1);
+                
+                var novoPrazo = dataBase.ToString("dd/MM/yyyy");
+
+                var sql = @"INSERT INTO verificacoes (id, processo_id, data_hora, responsavel, diligencia_realizada, diligencia_descricao, proximo_prazo_padrao, alteracoes_texto)
+                            VALUES (@id, @pid, @dh, @resp, @dr, @dd, @prz, 'Nova Verificação')";
+                
+                conn.Execute(sql, new { 
+                    id = Guid.NewGuid().ToString(), 
+                    pid = _processoId, 
+                    dh = DateTime.Now.ToString("s"), 
+                    resp = usuario,
+                    dr = DiligenciaRealizada ? 1 : 0,
+                    dd = DiligenciaDesc ?? "",
+                    prz = novoPrazo
+                });
+
+                conn.Execute("UPDATE processos SET cache_proximo_prazo = @p, observacao_fixa = @o WHERE id = @id", 
+                    new { p = novoPrazo, o = ObsFixa, id = _processoId });
+
+                MessageBox.Show("Verificação salva e prazo atualizado!", "Sucesso", MessageBoxButton.OK, MessageBoxImage.Information);
+                
+                DiligenciaRealizada = false;
+                DiligenciaPendente = false;
+                DiligenciaDesc = "";
+                PendenciaDesc = "";
+                
+                CarregarDados();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erro ao salvar: " + ex.Message, "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         [RelayCommand]
@@ -279,13 +321,14 @@ namespace SistemaJuridico.ViewModels
             Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.DataContext == this)?.Close();
         }
 
-        private (string, SolidColorBrush) CalcularStatus(string? dataStr)
+        private (string, SolidColorBrush) CalcularStatus(string dataStr)
         {
              if (DateTime.TryParse(dataStr, out DateTime d))
              {
                  var dias = (d.Date - DateTime.Now.Date).TotalDays;
                  if (dias < 0) return ("ATRASADO", Brushes.Red);
                  if (dias == 0) return ("VENCE HOJE", Brushes.OrangeRed);
+                 if (dias <= 7) return ($"Vence em {dias} dias", Brushes.Goldenrod);
                  return ("No Prazo", Brushes.Green);
              }
              return ("--", Brushes.Gray);
