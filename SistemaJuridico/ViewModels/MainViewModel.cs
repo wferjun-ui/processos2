@@ -34,18 +34,29 @@ namespace SistemaJuridico.ViewModels
             CarregarDashboard();
         }
 
+        // Classe interna para mapear o banco de dados (Evita o erro CS8133)
+        private class ProcessoDto
+        {
+            public string id { get; set; }
+            public string numero { get; set; }
+            public string paciente { get; set; }
+            public string cache_proximo_prazo { get; set; }
+        }
+
         [RelayCommand]
         public void CarregarDashboard()
         {
             Processos.Clear();
             using var conn = _db.GetConnection();
             
-            // Query Otimizada usando o Cache (source: 187)
-            var dados = conn.Query("SELECT id, numero, paciente, cache_proximo_prazo FROM processos");
+            // Correção: Usamos <ProcessoDto> para garantir que o 'item' não seja dynamic
+            var dados = conn.Query<ProcessoDto>("SELECT id, numero, paciente, cache_proximo_prazo FROM processos");
 
             foreach (var item in dados)
             {
+                // Como 'item' agora é fortemente tipado, o compilador aceita a desconstrução
                 var (texto, cor) = CalcularStatus(item.cache_proximo_prazo);
+
                 Processos.Add(new ProcessoModel
                 {
                     Id = item.id,
@@ -58,7 +69,6 @@ namespace SistemaJuridico.ViewModels
             }
         }
 
-        // Lógica de Prazos (Baseado em source: 53-54)
         private (string, SolidColorBrush) CalcularStatus(string? dataStr)
         {
             if (string.IsNullOrEmpty(dataStr)) return ("Sem Prazo", Brushes.Gray);
@@ -66,6 +76,7 @@ namespace SistemaJuridico.ViewModels
             if (DateTime.TryParseExact(dataStr, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime prazo))
             {
                 var dias = (prazo.Date - DateTime.Now.Date).TotalDays;
+                
                 if (dias < 0) return ("ATRASADO", Brushes.Red);
                 if (dias == 0) return ("VENCE HOJE", Brushes.Orange);
                 if (dias <= 7) return ($"Vence em {dias} dias", Brushes.Goldenrod);
