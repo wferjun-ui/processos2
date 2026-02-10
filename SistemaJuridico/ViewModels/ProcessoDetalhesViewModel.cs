@@ -30,12 +30,12 @@ namespace SistemaJuridico.ViewModels
         
         public ObservableCollection<dynamic> Historico { get; set; } = new();
 
-        public ProcessoDetalhesViewModel(string processoId)
-        {
-            _db = new DatabaseService();
-            _processoId = processoId;
-            CarregarDados();
-        }
+public ProcessoDetalhesViewModel(string processoId)
+{
+    _db = App.DB;
+    _processoId = processoId;
+    CarregarDados();
+}
 
         private void CarregarDados()
         {
