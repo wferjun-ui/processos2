@@ -14,6 +14,7 @@ namespace SistemaJuridico.Services
 
         public DatabaseService()
         {
+            // Define o caminho do banco na pasta AppData do usuário
             var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SistemaJuridico");
             Directory.CreateDirectory(folder);
             var dbPath = Path.Combine(folder, "juridico_v5.db");
@@ -26,9 +27,11 @@ namespace SistemaJuridico.Services
         {
             using var conn = GetConnection();
             conn.Open();
+            
+            // Otimizações do SQLite
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
 
-            // --- TABELAS COMPLETAS (Portado do Python source: 74-82) ---
+            // --- CRIAÇÃO DAS TABELAS ---
             
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
@@ -65,7 +68,7 @@ namespace SistemaJuridico.Services
                     FOREIGN KEY(processo_id) REFERENCES processos(id) ON DELETE CASCADE);
             ");
 
-            // Seed Admin (Se não existir nenhum usuário)
+            // Cria usuário admin padrão se não existir nenhum
             var count = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios");
             if (count == 0)
             {
@@ -73,7 +76,7 @@ namespace SistemaJuridico.Services
             }
         }
 
-        // --- AUTENTICAÇÃO (Portado do Python source: 96-99) ---
+        // --- AUTENTICAÇÃO ---
 
         public (bool Success, bool IsAdmin, string Username) Login(string username, string password)
         {
@@ -88,7 +91,9 @@ namespace SistemaJuridico.Services
 
             if (storedHash == inputHash)
             {
-                return (true, user.is_admin == 1, user.username);
+                // Conversão segura de long/int do SQLite para bool
+                bool isAdmin = (user.is_admin == 1);
+                return (true, isAdmin, user.username);
             }
             return (false, false, "");
         }
@@ -103,7 +108,12 @@ namespace SistemaJuridico.Services
                 INSERT INTO usuarios (id, username, password_hash, salt, is_admin, email) 
                 VALUES (@id, @u, @h, @s, @a, @e)",
                 new { 
-                    id = Guid.NewGuid().ToString(), u = username, h = hash, s = salt, a = isAdmin ? 1 : 0, e = email 
+                    id = Guid.NewGuid().ToString(), 
+                    u = username, 
+                    h = hash, 
+                    s = salt, 
+                    a = isAdmin ? 1 : 0, 
+                    e = email 
                 });
         }
 
@@ -132,28 +142,40 @@ namespace SistemaJuridico.Services
             {
                 var procId = Guid.NewGuid().ToString();
                 var hoje = DateTime.Now;
-                var dataPrazo = hoje.AddDays(14); // Regra simples
                 
+                // Regra de Prazo: 14 dias
+                var dataPrazo = hoje.AddDays(14); 
+                
+                // Ajuste Fim de Semana
                 if (dataPrazo.DayOfWeek == DayOfWeek.Saturday) dataPrazo = dataPrazo.AddDays(2);
                 if (dataPrazo.DayOfWeek == DayOfWeek.Sunday) dataPrazo = dataPrazo.AddDays(1);
                 
                 var prazoStr = dataPrazo.ToString("dd/MM/yyyy");
 
+                // Insere Processo
                 conn.Execute(@"INSERT INTO processos (id, numero, paciente, juiz, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
                     VALUES (@id, @num, @pac, @juiz, @class, 'Conhecimento', @dt, @prazo)",
                     new { id = procId, num = numero, pac = paciente, juiz, class = classificacao, dt = hoje.ToString("dd/MM/yyyy"), prazo = prazoStr }, trans);
 
+                // Insere Réu se houver
                 if (!string.IsNullOrEmpty(reu))
+                {
                     conn.Execute("INSERT INTO reus (id, processo_id, nome) VALUES (@id, @pid, @nome)",
                         new { id = Guid.NewGuid().ToString(), pid = procId, nome = reu }, trans);
+                }
 
+                // Cria Histórico Inicial
                 conn.Execute(@"INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, proximo_prazo_padrao, alteracoes_texto)
                     VALUES (@id, @pid, @dh, 'Cadastro Inicial', @resp, @prazo, 'Processo Criado')",
                     new { id = Guid.NewGuid().ToString(), pid = procId, dh = hoje.ToString("s"), resp = usuarioLogado, prazo = prazoStr }, trans);
 
                 trans.Commit();
             }
-            catch { trans.Rollback(); throw; }
+            catch 
+            { 
+                trans.Rollback(); 
+                throw; 
+            }
         }
     }
 }
