@@ -14,7 +14,7 @@ namespace SistemaJuridico.Services
 
         public DatabaseService()
         {
-            // Define o caminho do banco na pasta AppData do usuário
+            // Caminho do banco de dados na pasta do usuário
             var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SistemaJuridico");
             Directory.CreateDirectory(folder);
             var dbPath = Path.Combine(folder, "juridico_v5.db");
@@ -28,11 +28,9 @@ namespace SistemaJuridico.Services
             using var conn = GetConnection();
             conn.Open();
             
-            // Otimizações do SQLite
             conn.Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
 
             // --- CRIAÇÃO DAS TABELAS ---
-            
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, salt TEXT, is_admin INTEGER DEFAULT 0, email TEXT);
@@ -68,11 +66,22 @@ namespace SistemaJuridico.Services
                     FOREIGN KEY(processo_id) REFERENCES processos(id) ON DELETE CASCADE);
             ");
 
-            // Cria usuário admin padrão se não existir nenhum
-            var count = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios");
-            if (count == 0)
+            // --- CORREÇÃO DE LOGIN: FORÇAR ADMIN ---
+            // Verifica se o admin já existe
+            var adminExists = conn.ExecuteScalar<int>("SELECT count(*) FROM usuarios WHERE username = 'admin'");
+
+            if (adminExists == 0)
             {
+                // Se não existe, cria do zero
                 RegistrarUsuario("admin", "admin", "admin@sistema.local", true);
+            }
+            else
+            {
+                // SE JÁ EXISTE, RESETA A SENHA PARA "admin" PARA GARANTIR O ACESSO
+                var salt = GenerateSalt();
+                var hash = HashPassword("admin", salt);
+                conn.Execute("UPDATE usuarios SET password_hash = @h, salt = @s, is_admin = 1 WHERE username = 'admin'", 
+                    new { h = hash, s = salt });
             }
         }
 
@@ -91,7 +100,6 @@ namespace SistemaJuridico.Services
 
             if (storedHash == inputHash)
             {
-                // Conversão segura de long/int do SQLite para bool
                 bool isAdmin = (user.is_admin == 1);
                 return (true, isAdmin, user.username);
             }
@@ -143,16 +151,12 @@ namespace SistemaJuridico.Services
                 var procId = Guid.NewGuid().ToString();
                 var hoje = DateTime.Now;
                 
-                // Regra de Prazo: 14 dias
                 var dataPrazo = hoje.AddDays(14); 
-                
-                // Ajuste Fim de Semana
                 if (dataPrazo.DayOfWeek == DayOfWeek.Saturday) dataPrazo = dataPrazo.AddDays(2);
                 if (dataPrazo.DayOfWeek == DayOfWeek.Sunday) dataPrazo = dataPrazo.AddDays(1);
                 
                 var prazoStr = dataPrazo.ToString("dd/MM/yyyy");
 
-                // CORREÇÃO AQUI: Alterado @class para @classificacao e a propriedade no objeto anônimo
                 conn.Execute(@"INSERT INTO processos (id, numero, paciente, juiz, classificacao, status_fase, ultima_atualizacao, cache_proximo_prazo)
                     VALUES (@id, @num, @pac, @juiz, @classificacao, 'Conhecimento', @dt, @prazo)",
                     new { 
@@ -160,19 +164,17 @@ namespace SistemaJuridico.Services
                         num = numero, 
                         pac = paciente, 
                         juiz, 
-                        classificacao, // Agora nome da propriedade é válido
+                        classificacao, 
                         dt = hoje.ToString("dd/MM/yyyy"), 
                         prazo = prazoStr 
                     }, trans);
 
-                // Insere Réu se houver
                 if (!string.IsNullOrEmpty(reu))
                 {
                     conn.Execute("INSERT INTO reus (id, processo_id, nome) VALUES (@id, @pid, @nome)",
                         new { id = Guid.NewGuid().ToString(), pid = procId, nome = reu }, trans);
                 }
 
-                // Cria Histórico Inicial
                 conn.Execute(@"INSERT INTO verificacoes (id, processo_id, data_hora, status_processo, responsavel, proximo_prazo_padrao, alteracoes_texto)
                     VALUES (@id, @pid, @dh, 'Cadastro Inicial', @resp, @prazo, 'Processo Criado')",
                     new { id = Guid.NewGuid().ToString(), pid = procId, dh = hoje.ToString("s"), resp = usuarioLogado, prazo = prazoStr }, trans);
